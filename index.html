@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coleago Tender Scanner</title>
+<style>
+  :root{--bg:#0f1419;--panel:#1a2028;--line:#2b333d;--text:#e6e9ec;--muted:#8a94a0;--accent:#3b82f6;--yes:#16a34a;--no:#64748b}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:10px}
+  .brand{font-weight:600}
+  .tabs button{background:none;border:0;color:var(--muted);font:inherit;font-weight:600;cursor:pointer;padding:6px 12px;border-radius:6px}
+  .tabs button.on{background:var(--panel);color:var(--text)}
+  main{max-width:780px;margin:0 auto;padding:24px 20px 60px}
+  h2{font-size:18px;margin:0 0 4px}
+  .muted{color:var(--muted);font-size:13px}
+  label{display:block;margin:18px 0 6px;font-weight:600;font-size:14px}
+  textarea,input[type=text],input[type=password]{width:100%;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:inherit}
+  textarea{resize:vertical}
+  input[type=range]{width:100%}
+  button.go{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer}
+  button.go:disabled{opacity:.6;cursor:default}
+  .row{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+  .status{color:var(--muted);font-size:13px}
+  hr{border:0;border-top:1px solid var(--line);margin:28px 0}
+  .box{padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-top:14px}
+  .box.yes{border-left:4px solid var(--yes)}
+  .box.no{border-left:4px solid var(--no)}
+  .score{font-weight:700;margin-bottom:6px}
+  .card{padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-bottom:12px}
+  .cardtop{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .badge{background:var(--accent);color:#fff;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700}
+  .empty{padding:24px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);text-align:center}
+  a{color:var(--accent)}
+  code{background:var(--panel);padding:2px 6px;border-radius:4px;font-size:13px;word-break:break-all}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<header>
+  <span class="brand">Coleago Tender Scanner</span>
+  <span class="tabs">
+    <button id="tabP" class="on" onclick="show('p')">Parameters</button>
+    <button id="tabT" onclick="show('t')">Tenders</button>
+  </span>
+</header>
+
+<main>
+  <!-- ============ PARAMETERS ============ -->
+  <section id="paneP">
+    <h2>Judging parameters</h2>
+    <p class="muted">These decide what counts as a relevant tender. Saved changes apply to every incoming scan immediately.</p>
+
+    <label>What Coleago cares about</label>
+    <textarea id="profile" rows="11"></textarea>
+
+    <label>Relevance threshold: <b id="thVal">60</b> / 100</label>
+    <input type="range" id="threshold" min="0" max="100" step="5" value="60"
+           oninput="document.getElementById('thVal').textContent=this.value">
+    <p class="muted">A tender is kept only if it scores at or above this.</p>
+
+    <label>Keyword gate (comma separated — if none appear, the AI is never called, so it costs nothing)</label>
+    <input type="text" id="keywords">
+
+    <div class="row">
+      <button class="go" onclick="save()">Save parameters</button>
+      <span class="status" id="saveMsg"></span>
+    </div>
+
+    <hr>
+
+    <h2>Test the judge</h2>
+    <p class="muted">Paste a sample notice to see how it scores. Nothing is saved or emailed.</p>
+
+    <label>Your ingest secret</label>
+    <input type="password" id="secret" placeholder="the INGEST_SECRET you set in Vercel">
+    <p class="muted">Stored only in this browser, so you don't retype it.</p>
+
+    <label>Sample notice text</label>
+    <textarea id="sample" rows="4" placeholder="e.g. Appointment of a consultant to carry out a 5G spectrum valuation study. Closing 2026-08-15."></textarea>
+
+    <div class="row">
+      <button class="go" id="testBtn" onclick="runTest()">Run test</button>
+      <span class="status" id="testMsg"></span>
+    </div>
+    <div id="testOut"></div>
+  </section>
+
+  <!-- ============ TENDERS ============ -->
+  <section id="paneT" class="hide">
+    <h2>Captured tenders</h2>
+    <p class="muted">Opportunities the judge kept, newest first.</p>
+    <div id="list"><p class="muted">Loading…</p></div>
+  </section>
+</main>
+
+<script>
+function show(which){
+  document.getElementById('paneP').classList.toggle('hide', which!=='p');
+  document.getElementById('paneT').classList.toggle('hide', which!=='t');
+  document.getElementById('tabP').classList.toggle('on', which==='p');
+  document.getElementById('tabT').classList.toggle('on', which==='t');
+  if(which==='t') loadTenders();
+}
+
+// ---- load settings ----
+async function loadSettings(){
+  try{
+    const s = await (await fetch('/api/settings')).json();
+    document.getElementById('profile').value = s.profile || '';
+    document.getElementById('threshold').value = s.threshold ?? 60;
+    document.getElementById('thVal').textContent = s.threshold ?? 60;
+    document.getElementById('keywords').value = (s.keywords||[]).join(', ');
+    if(s._warning) setMsg('saveMsg', 'Storage not connected yet — showing defaults.');
+  }catch(e){ setMsg('saveMsg','Could not load settings.'); }
+}
+
+async function save(){
+  setMsg('saveMsg','Saving…');
+  const body = {
+    profile: document.getElementById('profile').value,
+    threshold: Number(document.getElementById('threshold').value),
+    keywords: document.getElementById('keywords').value.split(',').map(s=>s.trim()).filter(Boolean)
+  };
+  try{
+    const r = await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const j = await r.json();
+    setMsg('saveMsg', r.ok ? 'Saved.' : ('Failed: '+(j.error||'')));
+  }catch(e){ setMsg('saveMsg','Failed to save.'); }
+}
+
+// ---- test the judge ----
+document.getElementById('secret').value = localStorage.getItem('coleago_secret') || '';
+document.getElementById('secret').addEventListener('change', e=>localStorage.setItem('coleago_secret', e.target.value));
+
+async function runTest(){
+  const secret = document.getElementById('secret').value.trim();
+  const text = document.getElementById('sample').value.trim();
+  const out = document.getElementById('testOut');
+  out.innerHTML='';
+  if(!secret) return setMsg('testMsg','Enter your ingest secret first.');
+  if(!text)   return setMsg('testMsg','Paste some sample text first.');
+  localStorage.setItem('coleago_secret', secret);
+  setMsg('testMsg','Judging…');
+  document.getElementById('testBtn').disabled = true;
+  try{
+    const r = await fetch('/api/ingest',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+secret},
+      body:JSON.stringify({source:'Test', url:'', changed_text:text, test:true})
+    });
+    const j = await r.json();
+    setMsg('testMsg','');
+    if(r.status===401){ out.innerHTML='<div class="box no">Wrong ingest secret.</div>'; return; }
+    if(j.skipped){ out.innerHTML='<div class="box no"><div class="score">Filtered out for free — '+j.reason+'</div><div class="muted">No AI call was made, so this cost nothing.</div></div>'; return; }
+    if(j.error){ out.innerHTML='<div class="box no"><div class="score">Error</div><div class="muted">'+esc(j.detail||j.error)+'</div></div>'; return; }
+    const v=j.verdict||{};
+    out.innerHTML='<div class="box '+(v.relevant?'yes':'no')+'">'+
+      '<div class="score">Score '+v.score+' — '+(v.relevant?'KEEP':'drop')+'</div>'+
+      '<div><b>'+esc(v.title||'')+'</b>'+(v.category?' · '+esc(v.category):'')+'</div>'+
+      (v.deadline?'<div>Deadline: '+esc(v.deadline)+'</div>':'')+
+      '<div class="muted">'+esc(v.rationale||'')+'</div></div>';
+  }catch(e){ setMsg('testMsg','Request failed.'); }
+  document.getElementById('testBtn').disabled = false;
+}
+
+// ---- tenders ----
+async function loadTenders(){
+  const el=document.getElementById('list');
+  el.innerHTML='<p class="muted">Loading…</p>';
+  try{
+    const items = await (await fetch('/api/tenders')).json();
+    if(!items.length){ el.innerHTML='<div class="empty">Nothing captured yet. Relevant changes will appear here.</div>'; return; }
+    el.innerHTML = items.map(t=>'<div class="card"><div class="cardtop"><b>'+esc(t.title||'Untitled')+
+      '</b><span class="badge">'+(t.score??'')+'</span></div><div class="muted">'+esc(t.source||'')+
+      (t.category?' · '+esc(t.category):'')+(t.deadline?' · closes '+esc(t.deadline):'')+'</div>'+
+      (t.rationale?'<div>'+esc(t.rationale)+'</div>':'')+
+      (t.url?'<div><a href="'+esc(t.url)+'" target="_blank" rel="noreferrer">Open source page</a></div>':'')+
+      '</div>').join('');
+  }catch(e){ el.innerHTML='<div class="empty">Could not load tenders.</div>'; }
+}
+
+function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function setMsg(id,t){ document.getElementById(id).textContent=t; }
+
+loadSettings();
+</script>
+</body>
+</html>
