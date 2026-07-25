@@ -14,6 +14,7 @@ Score 31-69 if genuinely unclear.`,
   keywords: ['tender', 'rfp', 'rfq', 'proposal', 'expression of interest', 'eoi',
     'procurement', 'consult', 'advisory', 'study', "appel d'offre", 'bid',
     'terms of reference', 'invitation to bid'],
+  logAll: true, // VERIFICATION MODE: record every notification, not just the keepers
 };
 
 async function redis(command) {
@@ -27,6 +28,16 @@ async function redis(command) {
   });
   const j = await r.json();
   return j.result;
+}
+
+// Saves a record of what arrived and what we decided.
+async function record(entry) {
+  try {
+    await redis(['LPUSH', 'coleago:tenders', JSON.stringify(entry)]);
+    await redis(['LTRIM', 'coleago:tenders', '0', '499']);
+  } catch (e) {
+    console.log('could not save record:', String(e.message || e));
+  }
 }
 
 export default async function handler(req, res) {
@@ -54,8 +65,6 @@ export default async function handler(req, res) {
   const text = String(body.changed_text || body.diff || body.message || body.body || '').trim();
   const isTest = body.test === true || body.test === 'true';
 
-  if (!text) return res.status(200).json({ skipped: true, reason: 'empty' });
-
   // Load the judging settings you set in the dashboard.
   let settings = DEFAULTS;
   try {
@@ -65,10 +74,27 @@ export default async function handler(req, res) {
     // No Redis yet? Carry on with the defaults so the judge still works.
   }
 
-  // FREE FILTER: skip Claude entirely if nothing tender-ish is present.
+  const logAll = settings.logAll !== false;
+  const base = {
+    source,
+    url,
+    savedAt: new Date().toISOString(),
+    preview: text.slice(0, 300), // what actually arrived, for verification
+  };
+
+  // --- nothing in the payload ---
+  if (!text) {
+    console.log('INGEST empty |', source, url);
+    if (logAll && !isTest) await record({ ...base, status: 'empty', title: '(empty notification)' });
+    return res.status(200).json({ skipped: true, reason: 'empty', source, url });
+  }
+
+  // --- FREE FILTER: skip Claude entirely if nothing tender-ish is present ---
   const hay = text.toLowerCase();
   const matched = (settings.keywords || []).some((k) => hay.includes(String(k).toLowerCase()));
   if (!matched) {
+    console.log('INGEST no-keyword |', source, url);
+    if (logAll && !isTest) await record({ ...base, status: 'no-keyword', title: '(no tender keywords)' });
     return res.status(200).json({ skipped: true, reason: 'no keyword match', source, url });
   }
 
@@ -101,44 +127,41 @@ score is 0-100. Never invent details not in the text.`,
     const raw = (data.content || []).map((c) => c.text || '').join('');
     verdict = JSON.parse(raw.replace(/```json|```/g, '').trim());
   } catch (e) {
-    return res.status(500).json({ error: 'judge failed', detail: String(e.message || e) });
+    const msg = String(e.message || e);
+    console.log('INGEST judge-failed |', source, '|', msg);
+    if (logAll && !isTest) await record({ ...base, status: 'error', title: '(judge failed)', rationale: msg });
+    return res.status(500).json({ error: 'judge failed', detail: msg });
   }
 
   verdict.relevant = Number(verdict.score || 0) >= Number(settings.threshold || 60);
+  console.log('INGEST', verdict.relevant ? 'KEPT' : 'dropped', '| score', verdict.score, '|', source);
 
   // Test mode stops here — nothing saved, nothing emailed.
   if (isTest) return res.status(200).json({ verdict, source, url });
 
-  if (verdict.relevant) {
-    const tender = { ...verdict, source, url, savedAt: new Date().toISOString() };
+  // Save keepers always; save the drops too while verification mode is on.
+  if (verdict.relevant || logAll) {
+    await record({ ...base, ...verdict, status: verdict.relevant ? 'kept' : 'dropped' });
+  }
 
+  // EMAIL TO COLEAGO - only for genuine keepers, and only once configured.
+  if (verdict.relevant && process.env.RESEND_API_KEY && process.env.ALERT_EMAIL) {
     try {
-      await redis(['LPUSH', 'coleago:tenders', JSON.stringify(tender)]);
-      await redis(['LTRIM', 'coleago:tenders', '0', '499']);
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: process.env.ALERT_FROM || 'onboarding@resend.dev',
+          to: process.env.ALERT_EMAIL,
+          subject: `Tender (${verdict.score}): ${verdict.title}`,
+          text: `${verdict.title}\n\nScore: ${verdict.score}\nCategory: ${verdict.category || '-'}\nDeadline: ${verdict.deadline || '-'}\nSource: ${source}\n${url}\n\nWhy: ${verdict.rationale || ''}`,
+        }),
+      });
     } catch (e) {
-      return res.status(500).json({ error: 'could not save', detail: String(e.message || e) });
-    }
-
-    // EMAIL TO COLEAGO. Sends only if RESEND_API_KEY and ALERT_EMAIL are set,
-    // so it stays quiet until you're ready to switch it on.
-    if (process.env.RESEND_API_KEY && process.env.ALERT_EMAIL) {
-      try {
-        await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            from: process.env.ALERT_FROM || 'onboarding@resend.dev',
-            to: process.env.ALERT_EMAIL,
-            subject: `Tender (${verdict.score}): ${verdict.title}`,
-            text: `${verdict.title}\n\nScore: ${verdict.score}\nCategory: ${verdict.category || '-'}\nDeadline: ${verdict.deadline || '-'}\nSource: ${source}\n${url}\n\nWhy: ${verdict.rationale || ''}`,
-          }),
-        });
-      } catch (e) {
-        // Email failing must never lose the tender — it's already saved.
-      }
+      // Email failing must never lose the tender - it's already saved.
     }
   }
 
