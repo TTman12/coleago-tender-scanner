@@ -3,102 +3,222 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Coleago Tender Scanner</title>
+<title>Tender Scanner · Coleago</title>
 <style>
-  :root{--bg:#0f1419;--panel:#1a2028;--line:#2b333d;--text:#e6e9ec;--muted:#8a94a0;--accent:#3b82f6;--yes:#16a34a;--no:#64748b}
+  :root{
+    /* ---- BRAND: change these two lines to match Coleago exactly ---- */
+    --brand:        #0E4C8A;   /* sidebar blue */
+    --brand-deep:   #0A3866;   /* darker blue for hover / active */
+    /* --------------------------------------------------------------- */
+    --ink:      #1B2430;
+    --ink-soft: #5A6675;
+    --line:     #E2E7EC;
+    --surface:  #F7F9FB;
+    --kept:     #1A7F45;
+    --dropped:  #7A8794;
+    --empty:    #A66B00;
+    --error:    #B3261E;
+    --rail: 250px;
+    --font: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-  header{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:10px}
-  .brand{font-weight:600}
-  .tabs button{background:none;border:0;color:var(--muted);font:inherit;font-weight:600;cursor:pointer;padding:6px 12px;border-radius:6px}
-  .tabs button.on{background:var(--panel);color:var(--text)}
-  main{max-width:780px;margin:0 auto;padding:24px 20px 60px}
-  h2{font-size:18px;margin:0 0 4px}
-  .muted{color:var(--muted);font-size:13px}
-  label{display:block;margin:18px 0 6px;font-weight:600;font-size:14px}
-  textarea,input[type=text],input[type=password]{width:100%;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:inherit}
-  textarea{resize:vertical}
-  input[type=range]{width:100%}
-  button.go{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer}
-  button.go:disabled{opacity:.6;cursor:default}
-  .row{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
-  .status{color:var(--muted);font-size:13px}
-  hr{border:0;border-top:1px solid var(--line);margin:28px 0}
-  .box{padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-top:14px}
-  .box.yes{border-left:4px solid var(--yes)}
-  .box.no{border-left:4px solid var(--no)}
-  .score{font-weight:700;margin-bottom:6px}
-  .card{padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-bottom:12px}
-  .cardtop{display:flex;justify-content:space-between;align-items:center;gap:10px}
-  .badge{background:var(--accent);color:#fff;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700}
-  .empty{padding:24px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);text-align:center}
-  a{color:var(--accent)}
-  code{background:var(--panel);padding:2px 6px;border-radius:4px;font-size:13px;word-break:break-all}
+  html,body{height:100%}
+  body{
+    margin:0; display:flex; min-height:100vh;
+    background:#fff; color:var(--ink);
+    font-family:var(--font); font-size:15px; line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- left rail ---------- */
+  .rail{
+    width:var(--rail); flex:0 0 var(--rail);
+    background:var(--brand); color:#fff;
+    display:flex; flex-direction:column;
+    padding:26px 0 20px;
+  }
+  .logo{padding:0 24px 30px}
+  .logo svg{width:158px; height:auto; display:block}
+  .rail nav{display:flex; flex-direction:column}
+  .rail nav button{
+    all:unset; cursor:pointer;
+    padding:11px 24px; font-size:14.5px; font-weight:500;
+    color:rgba(255,255,255,.78);
+    border-left:3px solid transparent;
+    transition:background .15s, color .15s;
+  }
+  .rail nav button:hover{background:var(--brand-deep); color:#fff}
+  .rail nav button.on{background:var(--brand-deep); color:#fff; border-left-color:#fff; font-weight:600}
+  .rail nav button:focus-visible{outline:2px solid #fff; outline-offset:-2px}
+  .rail .foot{
+    margin-top:auto; padding:0 24px;
+    font-size:11.5px; letter-spacing:.03em;
+    color:rgba(255,255,255,.5); text-transform:uppercase;
+  }
+
+  /* ---------- main ---------- */
+  main{flex:1; min-width:0; padding:38px 44px 70px; max-width:920px}
+  h1{font-size:23px; font-weight:600; margin:0 0 4px; letter-spacing:-.01em}
+  h2{font-size:16px; font-weight:600; margin:0 0 4px}
+  .lede{color:var(--ink-soft); font-size:13.5px; margin:0 0 26px}
+  .note{color:var(--ink-soft); font-size:12.5px; margin:6px 0 0}
+
+  .panel{border:1px solid var(--line); border-radius:10px; padding:22px 24px; margin-bottom:22px; background:#fff}
+
+  label{display:block; font-weight:600; font-size:13.5px; margin:0 0 7px}
+  .field{margin-bottom:20px}
+  .field:last-child{margin-bottom:0}
+  textarea,input[type=text],input[type=password]{
+    width:100%; font:inherit; color:var(--ink);
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:7px; padding:10px 12px;
+  }
+  textarea{resize:vertical; line-height:1.5}
+  textarea:focus,input:focus{outline:2px solid var(--brand); outline-offset:-1px; background:#fff}
+  input[type=range]{width:100%; accent-color:var(--brand)}
+  .check{display:flex; align-items:flex-start; gap:10px; font-weight:500; font-size:14px}
+  .check input{width:auto; margin-top:3px; accent-color:var(--brand)}
+
+  .actions{display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:20px}
+  button.primary{
+    background:var(--brand); color:#fff; border:0; border-radius:7px;
+    padding:10px 20px; font:inherit; font-weight:600; cursor:pointer;
+    transition:background .15s;
+  }
+  button.primary:hover{background:var(--brand-deep)}
+  button.primary:disabled{opacity:.55; cursor:default}
+  button.ghost{
+    background:#fff; color:var(--brand); border:1px solid var(--line);
+    border-radius:7px; padding:9px 16px; font:inherit; font-weight:600; cursor:pointer;
+  }
+  button.ghost:hover{border-color:var(--brand)}
+  .msg{color:var(--ink-soft); font-size:13px}
+
+  /* ---------- verdict + records ---------- */
+  .verdict{border:1px solid var(--line); border-left:4px solid var(--dropped); border-radius:8px; padding:14px 16px; margin-top:16px; background:var(--surface)}
+  .verdict.keep{border-left-color:var(--kept)}
+  .verdict .head{font-weight:700; margin-bottom:5px}
+
+  .rec{border:1px solid var(--line); border-left:4px solid var(--dropped); border-radius:8px; padding:14px 16px; margin-bottom:12px}
+  .rec .top{display:flex; justify-content:space-between; align-items:baseline; gap:12px}
+  .rec .title{font-weight:600}
+  .rec .score{background:var(--brand); color:#fff; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:700; flex:none}
+  .rec .meta{color:var(--ink-soft); font-size:12.5px; margin-top:2px}
+  .rec .why{margin-top:7px; font-size:14px}
+  .rec .raw{margin-top:9px; padding:9px 11px; background:var(--surface); border-radius:6px;
+            font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11.5px; color:var(--ink-soft);
+            white-space:pre-wrap; word-break:break-word; max-height:130px; overflow:auto}
+  .rec a{color:var(--brand); font-size:13px; display:inline-block; margin-top:8px}
+  .tag{font-weight:700; text-transform:uppercase; letter-spacing:.04em; font-size:11px}
+
+  .empty-state{border:1px dashed var(--line); border-radius:10px; padding:34px; text-align:center; color:var(--ink-soft)}
   .hide{display:none}
+
+  @media (max-width:760px){
+    body{flex-direction:column}
+    .rail{width:100%; flex:none; flex-direction:row; align-items:center; padding:12px 16px; gap:8px; flex-wrap:wrap}
+    .logo{padding:0 14px 0 0}
+    .logo svg{width:112px}
+    .rail nav{flex-direction:row}
+    .rail nav button{padding:8px 14px; border-left:0; border-bottom:3px solid transparent}
+    .rail nav button.on{border-left:0; border-bottom-color:#fff}
+    .rail .foot{display:none}
+    main{padding:24px 18px 60px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
-<header>
-  <span class="brand">Coleago Tender Scanner</span>
-  <span class="tabs">
-    <button id="tabP" class="on" onclick="show('p')">Parameters</button>
-    <button id="tabT" onclick="show('t')">Tenders</button>
-  </span>
-</header>
+
+<aside class="rail">
+  <div class="logo">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 241 49" fill="none" role="img" aria-label="Coleago">
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M67.0083 0.198491C32.643 -0.878291 0 8.53743 0 22.1746C0 36.7081 40.1805 45.3897 67.0083 43.6338C44.821 43.1688 11.2573 35.5273 11.2297 22.1746C11.2022 8.68121 42.126 0.83783 67.0083 0.198491Z" fill="white"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M67.0079 6.42928C43.5328 5.66452 21.2294 12.3302 21.2324 21.9845C21.2324 32.2751 48.6812 38.4085 67.0079 37.1757C51.8503 36.8484 28.9228 31.4369 28.9045 21.9845C28.8861 12.4311 50.0119 6.87896 67.0079 6.42928Z" fill="white"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M67.0087 12.5965C52.3468 12.1346 38.4189 16.1725 38.4189 22.0214C38.4189 28.2557 55.5496 31.9694 67.0087 31.226C57.5441 31.0241 43.2216 27.7479 43.2125 22.0214C43.2125 16.2337 56.3939 12.8718 67.0087 12.5965Z" fill="white"/>
+      <path d="M88.4462 38.892H91.9213C91.9213 38.9593 91.9213 39.0449 91.9213 39.149C91.9213 39.253 91.9213 39.3325 91.9213 39.3845C91.9213 41.0027 91.542 42.2049 90.7925 43.0033C90.043 43.8017 88.902 44.2025 87.3725 44.2025C85.6472 44.2025 84.4328 43.712 83.7292 42.7311C83.0256 41.7502 82.6738 40.0228 82.6738 37.5491C82.6738 35.0713 83.0277 33.3378 83.7353 32.3487C84.443 31.3596 85.6554 30.8681 87.3725 30.8743C88.9163 30.8743 90.0532 31.2699 90.7833 32.0612C91.5083 32.8504 91.8754 34.0832 91.8754 35.7565V35.9767H88.4921V35.6158C88.528 35.0658 88.4435 34.5145 88.2443 34.0006C88.1708 33.8475 88.0531 33.72 87.9065 33.6344C87.7598 33.5488 87.5909 33.5091 87.4215 33.5203C87.2202 33.5099 87.0213 33.568 86.8574 33.6853C86.6935 33.8025 86.5742 33.9719 86.519 34.1658C86.364 34.594 86.2855 35.7157 86.2835 37.5307C86.2835 39.2805 86.363 40.3909 86.519 40.8681C86.5595 41.0708 86.6693 41.2531 86.8295 41.3837C86.9896 41.5143 87.1903 41.5851 87.397 41.5839C87.5679 41.5906 87.7368 41.5457 87.8819 41.4552C88.027 41.3646 88.1415 41.2326 88.2107 41.0761C88.4132 40.563 88.501 40.0117 88.4676 39.461C88.4676 39.4059 88.4676 39.308 88.4676 39.1795C88.4676 39.0511 88.4676 38.9471 88.4676 38.8736L88.4462 38.892ZM97.3419 37.5491C97.3419 39.3233 97.4184 40.4399 97.5744 40.8865C97.6273 41.0779 97.7409 41.247 97.8981 41.3684C98.0553 41.4898 98.2476 41.5569 98.4462 41.5597C98.6448 41.5625 98.839 41.5007 98.9995 41.3837C99.16 41.2668 99.2782 41.1009 99.3364 40.911C99.4924 40.4827 99.572 39.36 99.572 37.546C99.572 35.732 99.4924 34.6063 99.3364 34.1811C99.2851 33.9889 99.1699 33.82 99.0098 33.7021C98.8496 33.5842 98.6541 33.5244 98.4554 33.5326C98.2531 33.5283 98.0555 33.5934 97.8952 33.7169C97.735 33.8404 97.6218 34.015 97.5744 34.2117C97.4184 34.6613 97.3419 35.7718 97.3419 37.5521V37.5491ZM93.7567 37.5491C93.7567 35.0855 94.1095 33.3592 94.8152 32.3701C95.5208 31.381 96.7342 30.8855 98.4554 30.8834C100.175 30.8834 101.388 31.3749 102.096 32.3579C102.803 33.3409 103.156 35.0743 103.154 37.5583C103.154 40.0177 102.801 41.742 102.096 42.7311C101.39 43.7202 100.177 44.2137 98.4554 44.2117C96.7301 44.2117 95.5126 43.7222 94.8121 42.7403C94.1116 41.7583 93.7567 40.033 93.7567 37.5583V37.5491ZM108.718 43.8599H105.213V27.0352H108.718V43.8599ZM116.764 39.4243H120.071V39.7302C120.071 41.2067 119.685 42.3191 118.914 43.0676C118.143 43.816 116.992 44.1892 115.461 44.1872C114.748 44.1966 114.04 44.0848 113.365 43.8568C112.807 43.6803 112.302 43.3645 111.9 42.9391C111.474 42.4289 111.184 41.8198 111.056 41.1679C110.856 40.0034 110.773 38.8218 110.808 37.6408C110.808 35.8584 110.893 34.6124 111.065 33.9027C111.206 33.2561 111.509 32.656 111.946 32.159C112.366 31.7111 112.892 31.3765 113.475 31.1863C114.165 30.9545 114.889 30.8427 115.617 30.8559C116.346 30.8413 117.072 30.9616 117.758 31.2107C118.295 31.4098 118.774 31.7394 119.151 32.1699C119.529 32.6003 119.793 33.1181 119.921 33.6763C120.091 34.598 120.161 35.5355 120.129 36.4723V38.0018H114.39C114.386 38.0497 114.386 38.0977 114.39 38.1456C114.359 38.6779 114.344 39.048 114.344 39.2591C114.344 40.1462 114.442 40.7641 114.629 41.1098C114.724 41.2804 114.866 41.4199 115.039 41.5116C115.211 41.6033 115.407 41.6433 115.601 41.6268C115.775 41.6407 115.95 41.6118 116.11 41.5424C116.27 41.4731 116.41 41.3655 116.519 41.2291C116.749 40.8712 116.856 40.4481 116.825 40.0238C116.825 39.9168 116.825 39.7485 116.794 39.5222C116.792 39.4855 116.792 39.4487 116.794 39.412L116.764 39.4243ZM114.476 35.8299H116.856V35.7626C116.883 35.4567 116.898 35.2181 116.898 35.0865C116.93 34.6108 116.824 34.136 116.592 33.7192C116.488 33.5712 116.348 33.4527 116.184 33.375C116.021 33.2973 115.84 33.2631 115.659 33.2756C115.482 33.2623 115.305 33.2951 115.144 33.3706C114.983 33.4462 114.845 33.562 114.742 33.7069C114.523 34.1485 114.428 34.6411 114.466 35.1324C114.466 35.3129 114.466 35.4383 114.466 35.5576C114.466 35.6769 114.466 35.7504 114.482 35.8299H114.476ZM127.935 37.7724C127.208 37.9381 126.527 38.263 125.941 38.7237C125.738 38.9002 125.577 39.1191 125.468 39.3649C125.359 39.6107 125.305 39.8774 125.311 40.1462C125.292 40.4921 125.401 40.8329 125.617 41.1037C125.719 41.2234 125.848 41.3181 125.992 41.3806C126.137 41.4432 126.294 41.4719 126.452 41.4646C126.669 41.4835 126.888 41.4448 127.085 41.3525C127.283 41.2601 127.453 41.1173 127.577 40.9385C127.813 40.5928 127.929 40.0055 127.929 39.1826V37.7724H127.935ZM128.382 43.8599L128.174 42.7005C127.761 43.1437 127.265 43.5021 126.715 43.7559C126.173 43.9928 125.587 44.1127 124.996 44.1077C124.557 44.1292 124.118 44.0544 123.711 43.8884C123.305 43.7225 122.939 43.4695 122.64 43.1471C122.032 42.4215 121.722 41.4924 121.771 40.5469C121.738 39.7002 121.998 38.868 122.509 38.1915C123 37.5797 123.806 37.0433 124.925 36.5824L126.02 36.1817C127.342 35.6984 128.003 35.16 128.003 34.5543C128.013 34.401 127.993 34.2472 127.944 34.1017C127.895 33.9563 127.817 33.8221 127.715 33.7069C127.605 33.6052 127.476 33.527 127.335 33.477C127.194 33.427 127.045 33.4064 126.895 33.4163C126.717 33.4026 126.538 33.4306 126.372 33.498C126.207 33.5655 126.059 33.6705 125.941 33.8048C125.706 34.1573 125.599 34.5791 125.635 35.0009V35.0865H122.083C122.083 33.661 122.481 32.5965 123.273 31.9021C124.066 31.2077 125.277 30.859 126.892 30.859C127.547 30.8509 128.201 30.9186 128.841 31.0609C129.352 31.1701 129.839 31.3678 130.282 31.6451C130.741 31.9422 131.102 32.3677 131.322 32.8687C131.526 33.3439 131.628 34.2086 131.628 35.4628V40.3328C131.615 41.0898 131.65 41.8468 131.732 42.5995C131.778 43.0392 131.894 43.4687 132.074 43.8721L128.382 43.8599ZM137.165 35.8697V36.7874C137.165 38.4454 137.244 39.4946 137.4 39.9443C137.444 40.1357 137.552 40.3065 137.706 40.4283C137.86 40.5501 138.051 40.6157 138.247 40.6142C138.439 40.6217 138.628 40.5659 138.785 40.4553C138.942 40.3448 139.059 40.1856 139.116 40.0024C139.279 39.6068 139.361 38.7676 139.361 37.4848V36.9709C139.361 35.6035 139.284 34.7378 139.125 34.383C139.058 34.2139 138.939 34.0706 138.785 33.9738C138.631 33.877 138.45 33.8317 138.269 33.8446C138.099 33.8359 137.93 33.8759 137.782 33.9599C137.634 34.0439 137.513 34.1684 137.434 34.3187C137.222 34.7996 137.13 35.3242 137.165 35.8482V35.8697ZM142.9 31.2169V42.5353C142.923 43.3969 142.861 44.2587 142.714 45.108C142.615 45.6179 142.406 46.1001 142.102 46.5212C141.678 47.0608 141.112 47.4718 140.468 47.7081C139.684 47.9911 138.854 48.127 138.021 48.1089C136.54 48.1089 135.44 47.803 134.72 47.1912C134 46.5794 133.64 45.6514 133.64 44.4074H137.122C137.092 44.7718 137.183 45.1359 137.379 45.4445C137.478 45.5584 137.603 45.6474 137.743 45.7043C137.884 45.7611 138.035 45.7842 138.186 45.7718C138.367 45.7905 138.55 45.76 138.715 45.6836C138.881 45.6072 139.022 45.4875 139.125 45.3374C139.3 45.0529 139.385 44.487 139.385 43.6488V42.1652C138.992 42.5373 138.545 42.8469 138.058 43.0829C137.657 43.2722 137.219 43.3714 136.776 43.3735C136.194 43.3849 135.623 43.2114 135.146 42.8779C134.65 42.5155 134.267 42.0202 134.041 41.4493C133.875 40.9944 133.772 40.5189 133.735 40.0361C133.671 39.4243 133.64 38.6228 133.64 37.65C133.64 36.6772 133.662 35.8697 133.711 35.1355C133.744 34.5352 133.807 33.9369 133.901 33.3429C134.023 32.677 134.365 32.0715 134.873 31.6237C135.372 31.1763 136.02 30.9309 136.69 30.9354C137.242 30.9322 137.784 31.0746 138.263 31.3484C138.81 31.6866 139.29 32.1245 139.676 32.6393V31.2291L142.9 31.2169ZM148.584 37.546C148.584 39.3203 148.663 40.4368 148.819 40.8834C148.873 41.0737 148.987 41.2415 149.144 41.3618C149.301 41.4822 149.492 41.5487 149.69 41.5514C149.887 41.5542 150.081 41.493 150.241 41.3771C150.401 41.2611 150.519 41.0966 150.578 40.9079C150.734 40.4796 150.814 39.357 150.814 37.543C150.814 35.7289 150.734 34.6032 150.578 34.178C150.519 33.9895 150.4 33.8253 150.239 33.7099C150.079 33.5945 149.885 33.534 149.688 33.5374C149.49 33.5408 149.299 33.608 149.142 33.729C148.986 33.8499 148.873 34.0181 148.819 34.2086C148.663 34.6583 148.584 35.7687 148.584 37.5491V37.546ZM144.999 37.546C144.999 35.0825 145.353 33.3562 146.06 32.3671C146.768 31.378 147.98 30.8824 149.697 30.8804C151.417 30.8804 152.63 31.3719 153.338 32.3548C154.045 33.3378 154.399 35.0713 154.399 37.5552C154.399 40.0147 154.045 41.7389 153.338 42.728C152.63 43.7171 151.417 44.2106 149.697 44.2086C147.972 44.2086 146.758 43.7181 146.054 42.7372C145.35 41.7563 144.999 40.0269 144.999 37.5491V37.546Z" fill="white"/>
+      <path d="M162.873 39.2282H164.561C164.561 40.7149 164.22 41.8661 163.537 42.6819C162.853 43.4976 161.888 43.9055 160.64 43.9055C159.271 43.9055 158.258 43.3681 157.599 42.2934C156.94 41.2186 156.615 39.5596 156.623 37.3163C156.623 35.1729 156.966 33.571 157.651 32.5106C158.336 31.4552 159.37 30.926 160.762 30.926C161.264 30.8999 161.767 30.9801 162.236 31.1614C162.705 31.3428 163.13 31.6211 163.485 31.9783C164.151 32.6798 164.484 33.6373 164.482 34.8507V35.1046H162.806C162.818 34.4094 162.624 33.7259 162.249 33.1407C162.086 32.9195 161.871 32.7421 161.622 32.6241C161.374 32.5062 161.101 32.4514 160.826 32.4647C160.448 32.4452 160.073 32.5416 159.751 32.7412C159.429 32.9407 159.175 33.2338 159.025 33.5812C158.647 34.3154 158.459 35.5829 158.459 37.3836C158.459 39.1844 158.639 40.4641 159 41.2227C159.152 41.5734 159.408 41.8693 159.732 42.071C160.057 42.2727 160.435 42.3706 160.817 42.3515C161.114 42.3617 161.409 42.2928 161.67 42.152C161.932 42.0112 162.152 41.8035 162.307 41.55C162.653 41.0147 162.839 40.2438 162.861 39.2282H162.873ZM166.638 37.4111C166.638 35.2046 166.992 33.5731 167.7 32.5167C168.413 31.4521 169.496 30.9168 170.958 30.9168C172.42 30.9168 173.531 31.446 174.231 32.5014C174.932 33.5568 175.286 35.1964 175.286 37.4264C175.286 39.6565 174.935 41.2992 174.237 42.3423C173.54 43.3854 172.448 43.9055 170.958 43.9055C169.468 43.9055 168.367 43.3885 167.676 42.3515C166.984 41.3145 166.638 39.6748 166.638 37.4264V37.4111ZM168.474 37.4111C168.474 39.2466 168.663 40.5426 169.04 41.2992C169.209 41.6566 169.482 41.955 169.823 42.1557C170.164 42.3564 170.557 42.4502 170.952 42.4249C171.347 42.4479 171.74 42.3503 172.079 42.1449C172.418 41.9395 172.686 41.636 172.848 41.2747C173.232 40.5099 173.422 39.2221 173.42 37.4111C173.418 35.6002 173.228 34.3113 172.848 33.5445C172.661 33.2047 172.385 32.9214 172.051 32.7241C171.717 32.5268 171.335 32.4227 170.947 32.4227C170.559 32.4227 170.178 32.5268 169.843 32.7241C169.509 32.9214 169.234 33.2047 169.046 33.5445C168.665 34.2868 168.474 35.5788 168.474 37.4203V37.4111ZM177.559 43.5537V31.2564H179.174V32.7859C179.439 32.2254 179.865 31.7568 180.398 31.4399C180.969 31.1251 181.615 30.9698 182.267 30.9902C183.35 30.9902 184.121 31.2655 184.58 31.8162C185.039 32.3668 185.268 33.31 185.268 34.6458V43.5537H183.543V34.5173C183.583 33.9835 183.431 33.4528 183.114 33.0214C182.947 32.8488 182.744 32.7151 182.519 32.63C182.295 32.5448 182.054 32.5103 181.814 32.5289C181.474 32.5116 181.134 32.5677 180.818 32.6933C180.501 32.8189 180.215 33.0112 179.979 33.257C179.504 33.7985 179.26 34.5047 179.3 35.2239V43.5537H177.559ZM187.519 39.8584H189.23C189.233 39.8807 189.233 39.9033 189.23 39.9257C189.212 40.0411 189.202 40.1576 189.199 40.2744C189.179 40.5555 189.219 40.8377 189.318 41.1017C189.417 41.3656 189.571 41.6052 189.771 41.8039C190.237 42.1849 190.831 42.3731 191.432 42.3301C192.002 42.3614 192.562 42.1694 192.992 41.7947C193.186 41.6074 193.337 41.3808 193.435 41.1302C193.534 40.8795 193.578 40.6107 193.564 40.3417C193.564 39.373 192.82 38.6307 191.331 38.1147H191.3C189.806 37.5947 188.837 37.0787 188.394 36.5668C187.954 36.0529 187.731 35.3096 187.731 34.3307C187.731 33.2539 188.046 32.4147 188.676 31.8131C189.306 31.2115 190.184 30.9056 191.31 30.8954C192.506 30.8954 193.408 31.2013 194.014 31.7611C194.62 32.3209 194.932 33.1927 194.932 34.3154V34.4867H193.298C193.261 33.7464 193.093 33.206 192.793 32.8654C192.61 32.6854 192.391 32.547 192.15 32.4599C191.908 32.3728 191.651 32.3389 191.395 32.3607C190.843 32.315 190.295 32.4849 189.866 32.8348C189.687 33.0229 189.55 33.2464 189.463 33.4909C189.376 33.7354 189.341 33.9955 189.361 34.2542C189.356 34.5094 189.402 34.7631 189.496 35.0006C189.574 35.2102 189.708 35.3943 189.884 35.5329C190.196 35.8041 190.819 36.0907 191.753 36.3925C192.252 36.5485 192.637 36.68 192.91 36.784C193.62 37.0197 194.25 37.4512 194.727 38.0291C195.113 38.6203 195.303 39.3181 195.271 40.0236C195.271 41.2594 194.917 42.2118 194.21 42.8807C193.497 43.5506 192.49 43.8841 191.178 43.8841C189.976 43.8841 189.064 43.5782 188.446 42.9297C187.828 42.2811 187.529 41.3481 187.529 40.1092V39.8523L187.519 39.8584ZM203.543 43.5537V41.9508C203.323 42.5426 202.914 43.0457 202.38 43.3824C201.806 43.7289 201.145 43.903 200.475 43.8841C199.447 43.8841 198.7 43.6332 198.229 43.1254C197.758 42.6176 197.526 41.8162 197.526 40.7118V31.2564H199.321V40.7577C199.294 41.1842 199.429 41.6053 199.701 41.9355C199.837 42.0778 200.002 42.1887 200.185 42.2605C200.369 42.3324 200.566 42.3634 200.762 42.3515C201.122 42.372 201.481 42.3136 201.816 42.1804C202.15 42.0473 202.451 41.8425 202.698 41.5806C203.163 41.0667 203.393 40.357 203.393 39.4209V31.2564H205.137V43.5537H203.543ZM207.825 43.5537V27.0991H209.545V43.5537H207.825ZM214.099 41.0055C214.099 41.5194 214.191 41.8559 214.378 42.0181C214.564 42.1802 214.99 42.2567 215.705 42.2567H215.935C215.986 42.2545 216.037 42.2484 216.088 42.2383V43.7464L215.66 43.7678C215.219 43.7892 214.935 43.8015 214.812 43.8015C214.005 43.8015 213.399 43.6393 213.004 43.3151C212.798 43.1323 212.637 42.9044 212.534 42.6492C212.431 42.394 212.387 42.1183 212.408 41.8437V32.6666H210.698V31.2564H212.408V27.9771H214.087V31.2564H216.088V32.6788H214.087V41.0116L214.099 41.0055ZM217.498 29.3292V27.0991H219.272V29.3353L217.498 29.3292ZM217.498 43.5537V31.2564H219.272V43.5537H217.498ZM221.879 43.5537V31.2564H223.494V32.7859C223.759 32.2254 224.185 31.7568 224.717 31.4399C225.289 31.1251 225.934 30.9698 226.586 30.9902C227.669 30.9902 228.44 31.2655 228.899 31.8162C229.358 32.3637 229.59 33.3059 229.59 34.6458V43.5537H227.856V34.5173C227.898 33.9833 227.746 33.4521 227.428 33.0214C227.261 32.8484 227.058 32.7145 226.833 32.6294C226.608 32.5442 226.367 32.5099 226.128 32.5289C225.787 32.5116 225.447 32.5677 225.131 32.6933C224.814 32.8189 224.528 33.0112 224.292 33.257C223.817 33.7985 223.573 34.5047 223.613 35.2239V43.5537H221.879ZM233.659 37.4356C233.659 39.1548 233.838 40.3866 234.197 41.1309C234.343 41.4734 234.589 41.7636 234.903 41.963C235.217 42.1624 235.585 42.2616 235.956 42.2475C236.339 42.2665 236.718 42.168 237.043 41.9651C237.368 41.7622 237.623 41.4647 237.773 41.1126C238.134 40.3601 238.316 39.0814 238.318 37.2765C238.318 35.5818 238.126 34.3582 237.743 33.6057C237.588 33.252 237.33 32.9534 237.002 32.7492C236.675 32.545 236.293 32.4447 235.907 32.4616C235.535 32.4516 235.169 32.5583 234.86 32.7667C234.551 32.9751 234.315 33.2749 234.185 33.6241C233.83 34.401 233.653 35.6797 233.653 37.4509L233.659 37.4356ZM232.218 44.6978H233.928C233.932 44.916 233.984 45.1308 234.081 45.3261C234.179 45.5215 234.319 45.6925 234.491 45.8266C234.919 46.1046 235.425 46.2376 235.935 46.2059C236.777 46.2059 237.384 45.9306 237.755 45.3799C238.131 44.8324 238.318 43.9483 238.318 42.7216C238.318 42.6849 238.318 42.5962 238.318 42.4555C238.318 42.3148 238.318 42.1802 238.318 42.067C238.101 42.5845 237.73 43.0232 237.256 43.3243C236.747 43.6167 236.167 43.7628 235.58 43.7464C235.004 43.767 234.434 43.621 233.938 43.3258C233.443 43.0307 233.043 42.5989 232.787 42.0823C232.175 40.977 231.869 39.2945 231.869 37.0349C231.869 35.0159 232.192 33.4986 232.836 32.483C233.136 31.9923 233.562 31.5914 234.07 31.3223C234.578 31.0532 235.15 30.9258 235.724 30.9535C236.309 30.9348 236.887 31.0925 237.382 31.4062C237.838 31.71 238.178 32.1598 238.345 32.6819V31.2564H240.013V42.9939C240.013 44.5051 239.649 45.6695 238.921 46.4873C238.196 47.3102 237.165 47.7109 235.834 47.7109C234.902 47.7504 233.986 47.4577 233.249 46.885C232.928 46.6333 232.671 46.3105 232.497 45.942C232.323 45.5735 232.237 45.1695 232.246 44.762V44.6886L232.218 44.6978Z" fill="white"/>
+    </svg>
+  </div>
+
+  <nav>
+    <button id="navP" class="on" onclick="show('p')">Parameters</button>
+    <button id="navT" onclick="show('t')">Tenders</button>
+  </nav>
+
+  <div class="foot">Tender Scanner</div>
+</aside>
 
 <main>
-  <!-- ============ PARAMETERS ============ -->
+  <!-- ================= PARAMETERS ================= -->
   <section id="paneP">
-    <h2>Judging parameters</h2>
-    <p class="muted">These decide what counts as a relevant tender. Saved changes apply to every incoming scan immediately.</p>
+    <h1>Judging parameters</h1>
+    <p class="lede">What the scanner treats as a relevant opportunity. Saved changes apply to the next incoming scan.</p>
 
-    <label>What Coleago cares about</label>
-    <textarea id="profile" rows="11"></textarea>
+    <div class="panel">
+      <div class="field">
+        <label for="profile">What Coleago is looking for</label>
+        <textarea id="profile" rows="11"></textarea>
+      </div>
 
-    <label>Relevance threshold: <b id="thVal">60</b> / 100</label>
-    <input type="range" id="threshold" min="0" max="100" step="5" value="60"
-           oninput="document.getElementById('thVal').textContent=this.value">
-    <p class="muted">A tender is kept only if it scores at or above this.</p>
+      <div class="field">
+        <label for="threshold">Relevance threshold — <span id="thVal">60</span> out of 100</label>
+        <input type="range" id="threshold" min="0" max="100" step="5" value="60"
+               oninput="document.getElementById('thVal').textContent=this.value">
+        <p class="note">An opportunity is kept only if it scores at or above this.</p>
+      </div>
 
-    <label>Keyword gate (comma separated — if none appear, the AI is never called, so it costs nothing)</label>
-    <input type="text" id="keywords">
+      <div class="field">
+        <label for="keywords">Keyword gate</label>
+        <input type="text" id="keywords">
+        <p class="note">Comma separated. If none of these appear in a change, it is discarded before reaching the AI, at no cost.</p>
+      </div>
 
-    <label style="margin-top:18px">
-      <input type="checkbox" id="logAll" style="width:auto;margin-right:8px">
-      Verification mode — record every notification, not just the keepers
-    </label>
-    <p class="muted">Handy while setting up: the Tenders tab then shows everything that arrived and what was decided. Untick once you trust it.</p>
+      <div class="field">
+        <label class="check">
+          <input type="checkbox" id="logAll">
+          <span>Record every notification, not just the matches</span>
+        </label>
+        <p class="note">Useful while setting up: the Tenders page then shows everything that arrived and what was decided. Turn it off once you trust the results.</p>
+      </div>
 
-    <div class="row">
-      <button class="go" onclick="save()">Save parameters</button>
-      <span class="status" id="saveMsg"></span>
+      <div class="actions">
+        <button class="primary" onclick="save()">Save parameters</button>
+        <span class="msg" id="saveMsg"></span>
+      </div>
     </div>
 
-    <hr>
+    <h2>Try a sample notice</h2>
+    <p class="lede">See how a piece of text scores under the current parameters. Nothing is saved or emailed.</p>
 
-    <h2>Test the judge</h2>
-    <p class="muted">Paste a sample notice to see how it scores. Nothing is saved or emailed.</p>
+    <div class="panel">
+      <div class="field">
+        <label for="secret">Ingest secret</label>
+        <input type="password" id="secret" placeholder="the INGEST_SECRET set in Vercel">
+        <p class="note">Kept in this browser only, so you enter it once.</p>
+      </div>
 
-    <label>Your ingest secret</label>
-    <input type="password" id="secret" placeholder="the INGEST_SECRET you set in Vercel">
-    <p class="muted">Stored only in this browser, so you don't retype it.</p>
+      <div class="field">
+        <label for="sample">Notice text</label>
+        <textarea id="sample" rows="4" placeholder="Appointment of a consultant to carry out a 5G spectrum valuation study. Closing 15 August 2026."></textarea>
+      </div>
 
-    <label>Sample notice text</label>
-    <textarea id="sample" rows="4" placeholder="e.g. Appointment of a consultant to carry out a 5G spectrum valuation study. Closing 2026-08-15."></textarea>
-
-    <div class="row">
-      <button class="go" id="testBtn" onclick="runTest()">Run test</button>
-      <span class="status" id="testMsg"></span>
+      <div class="actions">
+        <button class="primary" id="testBtn" onclick="runTest()">Score this notice</button>
+        <span class="msg" id="testMsg"></span>
+      </div>
+      <div id="testOut"></div>
     </div>
-    <div id="testOut"></div>
   </section>
 
-  <!-- ============ TENDERS ============ -->
+  <!-- ================= TENDERS ================= -->
   <section id="paneT" class="hide">
-    <h2>Captured tenders</h2>
-    <p class="muted">Newest first. While verification mode is on, this shows everything that arrived and what was decided about it.</p>
-    <div class="row"><button class="go" onclick="loadTenders()">Refresh</button></div>
-    <div id="list"><p class="muted">Loading…</p></div>
+    <h1>Opportunities</h1>
+    <p class="lede">Newest first. While every notification is being recorded, this also shows what was discarded and why.</p>
+    <div class="actions" style="margin-top:0;margin-bottom:18px">
+      <button class="ghost" onclick="loadTenders()">Refresh</button>
+    </div>
+    <div id="list"><p class="msg">Loading…</p></div>
   </section>
 </main>
 
@@ -106,12 +226,11 @@
 function show(which){
   document.getElementById('paneP').classList.toggle('hide', which!=='p');
   document.getElementById('paneT').classList.toggle('hide', which!=='t');
-  document.getElementById('tabP').classList.toggle('on', which==='p');
-  document.getElementById('tabT').classList.toggle('on', which==='t');
+  document.getElementById('navP').classList.toggle('on', which==='p');
+  document.getElementById('navT').classList.toggle('on', which==='t');
   if(which==='t') loadTenders();
 }
 
-// ---- load settings ----
 async function loadSettings(){
   try{
     const s = await (await fetch('/api/settings')).json();
@@ -120,8 +239,8 @@ async function loadSettings(){
     document.getElementById('thVal').textContent = s.threshold ?? 60;
     document.getElementById('keywords').value = (s.keywords||[]).join(', ');
     document.getElementById('logAll').checked = s.logAll !== false;
-    if(s._warning) setMsg('saveMsg', 'Storage not connected yet — showing defaults.');
-  }catch(e){ setMsg('saveMsg','Could not load settings.'); }
+    if(s._warning) setMsg('saveMsg','Storage is not connected, so these are the defaults.');
+  }catch(e){ setMsg('saveMsg','Could not load the parameters.'); }
 }
 
 async function save(){
@@ -135,11 +254,10 @@ async function save(){
   try{
     const r = await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const j = await r.json();
-    setMsg('saveMsg', r.ok ? 'Saved.' : ('Failed: '+(j.error||'')));
-  }catch(e){ setMsg('saveMsg','Failed to save.'); }
+    setMsg('saveMsg', r.ok ? 'Saved.' : ('Not saved — '+(j.error||'unknown problem')));
+  }catch(e){ setMsg('saveMsg','Not saved — the request failed.'); }
 }
 
-// ---- test the judge ----
 document.getElementById('secret').value = localStorage.getItem('coleago_secret') || '';
 document.getElementById('secret').addEventListener('change', e=>localStorage.setItem('coleago_secret', e.target.value));
 
@@ -148,55 +266,64 @@ async function runTest(){
   const text = document.getElementById('sample').value.trim();
   const out = document.getElementById('testOut');
   out.innerHTML='';
-  if(!secret) return setMsg('testMsg','Enter your ingest secret first.');
-  if(!text)   return setMsg('testMsg','Paste some sample text first.');
+  if(!secret) return setMsg('testMsg','Enter the ingest secret first.');
+  if(!text)   return setMsg('testMsg','Add some notice text first.');
   localStorage.setItem('coleago_secret', secret);
-  setMsg('testMsg','Judging…');
+  setMsg('testMsg','Scoring…');
   document.getElementById('testBtn').disabled = true;
   try{
     const r = await fetch('/api/ingest',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+secret},
-      body:JSON.stringify({source:'Test', url:'', changed_text:text, test:true})
+      body:JSON.stringify({source:'Sample', url:'', changed_text:text, test:true})
     });
     const j = await r.json();
     setMsg('testMsg','');
-    if(r.status===401){ out.innerHTML='<div class="box no">Wrong ingest secret.</div>'; return; }
-    if(j.skipped){ out.innerHTML='<div class="box no"><div class="score">Filtered out for free — '+j.reason+'</div><div class="muted">No AI call was made, so this cost nothing.</div></div>'; return; }
-    if(j.error){ out.innerHTML='<div class="box no"><div class="score">Error</div><div class="muted">'+esc(j.detail||j.error)+'</div></div>'; return; }
-    const v=j.verdict||{};
-    out.innerHTML='<div class="box '+(v.relevant?'yes':'no')+'">'+
-      '<div class="score">Score '+v.score+' — '+(v.relevant?'KEEP':'drop')+'</div>'+
-      '<div><b>'+esc(v.title||'')+'</b>'+(v.category?' · '+esc(v.category):'')+'</div>'+
-      (v.deadline?'<div>Deadline: '+esc(v.deadline)+'</div>':'')+
-      '<div class="muted">'+esc(v.rationale||'')+'</div></div>';
-  }catch(e){ setMsg('testMsg','Request failed.'); }
+    if(r.status===401){ out.innerHTML='<div class="verdict"><div class="head">That ingest secret does not match</div><div class="msg">Check the value set in Vercel.</div></div>'; }
+    else if(j.skipped){ out.innerHTML='<div class="verdict"><div class="head">Discarded before the AI — '+esc(j.reason)+'</div><div class="msg">No AI call was made, so this cost nothing.</div></div>'; }
+    else if(j.error){ out.innerHTML='<div class="verdict"><div class="head">Could not score this</div><div class="msg">'+esc(j.detail||j.error)+'</div></div>'; }
+    else{
+      const v=j.verdict||{};
+      out.innerHTML='<div class="verdict '+(v.relevant?'keep':'')+'">'+
+        '<div class="head">Scored '+esc(v.score)+' — '+(v.relevant?'would be kept':'below the threshold')+'</div>'+
+        '<div><b>'+esc(v.title||'')+'</b>'+(v.category?' · '+esc(v.category):'')+'</div>'+
+        (v.deadline?'<div class="msg">Closes '+esc(v.deadline)+'</div>':'')+
+        '<div class="why">'+esc(v.rationale||'')+'</div></div>';
+    }
+  }catch(e){ setMsg('testMsg','The request failed.'); }
   document.getElementById('testBtn').disabled = false;
 }
 
-// ---- tenders ----
+const LABEL={kept:'Kept', dropped:'Below threshold', 'no-keyword':'No keywords', empty:'Nothing received', error:'Error'};
+const COLOUR={kept:'var(--kept)', dropped:'var(--dropped)', 'no-keyword':'var(--dropped)', empty:'var(--empty)', error:'var(--error)'};
+
 async function loadTenders(){
   const el=document.getElementById('list');
-  el.innerHTML='<p class="muted">Loading…</p>';
+  el.innerHTML='<p class="msg">Loading…</p>';
   try{
     const items = await (await fetch('/api/tenders')).json();
-    if(!items.length){ el.innerHTML='<div class="empty">Nothing captured yet. Relevant changes will appear here.</div>'; return; }
+    if(!items.length){
+      el.innerHTML='<div class="empty-state">Nothing recorded yet. Opportunities appear here as soon as a watched page changes.</div>';
+      return;
+    }
     el.innerHTML = items.map(t=>{
-      const st = t.status || (t.relevant?'kept':'');
-      const label = {kept:'KEPT', dropped:'not relevant', 'no-keyword':'filtered free', empty:'empty', error:'error'}[st] || st;
-      const colour = {kept:'var(--yes)', dropped:'var(--no)', 'no-keyword':'var(--no)', empty:'#a16207', error:'#b91c1c'}[st] || 'var(--no)';
-      return '<div class="card" style="border-left:4px solid '+colour+'">'+
-        '<div class="cardtop"><b>'+esc(t.title||'Untitled')+'</b>'+
-        (t.score!=null?'<span class="badge">'+t.score+'</span>':'')+'</div>'+
-        '<div class="muted">'+(label?'<b>'+esc(label)+'</b> · ':'')+esc(t.source||'unknown source')+
-        (t.category?' · '+esc(t.category):'')+(t.deadline?' · closes '+esc(t.deadline):'')+
+      const st = t.status || (t.relevant?'kept':'dropped');
+      const label = LABEL[st] || st;
+      const colour = COLOUR[st] || 'var(--dropped)';
+      return '<div class="rec" style="border-left-color:'+colour+'">'+
+        '<div class="top"><span class="title">'+esc(t.title||'Untitled')+'</span>'+
+        (t.score!=null?'<span class="score">'+esc(t.score)+'</span>':'')+'</div>'+
+        '<div class="meta"><span class="tag" style="color:'+colour+'">'+esc(label)+'</span> · '+
+        esc(t.source||'unknown source')+
+        (t.category?' · '+esc(t.category):'')+
+        (t.deadline?' · closes '+esc(t.deadline):'')+
         (t.savedAt?' · '+esc(new Date(t.savedAt).toLocaleString()):'')+'</div>'+
-        (t.rationale?'<div>'+esc(t.rationale)+'</div>':'')+
-        (t.preview?'<div class="muted" style="margin-top:6px;font-family:monospace;font-size:12px;white-space:pre-wrap">'+esc(t.preview)+'</div>':'')+
-        (t.url?'<div style="margin-top:6px"><a href="'+esc(t.url)+'" target="_blank" rel="noreferrer">Open source page</a></div>':'')+
+        (t.rationale?'<div class="why">'+esc(t.rationale)+'</div>':'')+
+        (t.preview?'<div class="raw">'+esc(t.preview)+'</div>':'')+
+        (t.url?'<a href="'+esc(t.url)+'" target="_blank" rel="noreferrer">Open the source page</a>':'')+
         '</div>';
     }).join('');
-  }catch(e){ el.innerHTML='<div class="empty">Could not load tenders.</div>'; }
+  }catch(e){ el.innerHTML='<div class="empty-state">Could not load the opportunities. Refresh to try again.</div>'; }
 }
 
 function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
