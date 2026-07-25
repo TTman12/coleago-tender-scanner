@@ -63,6 +63,12 @@
     <label>Keyword gate (comma separated — if none appear, the AI is never called, so it costs nothing)</label>
     <input type="text" id="keywords">
 
+    <label style="margin-top:18px">
+      <input type="checkbox" id="logAll" style="width:auto;margin-right:8px">
+      Verification mode — record every notification, not just the keepers
+    </label>
+    <p class="muted">Handy while setting up: the Tenders tab then shows everything that arrived and what was decided. Untick once you trust it.</p>
+
     <div class="row">
       <button class="go" onclick="save()">Save parameters</button>
       <span class="status" id="saveMsg"></span>
@@ -90,7 +96,8 @@
   <!-- ============ TENDERS ============ -->
   <section id="paneT" class="hide">
     <h2>Captured tenders</h2>
-    <p class="muted">Opportunities the judge kept, newest first.</p>
+    <p class="muted">Newest first. While verification mode is on, this shows everything that arrived and what was decided about it.</p>
+    <div class="row"><button class="go" onclick="loadTenders()">Refresh</button></div>
     <div id="list"><p class="muted">Loading…</p></div>
   </section>
 </main>
@@ -112,6 +119,7 @@ async function loadSettings(){
     document.getElementById('threshold').value = s.threshold ?? 60;
     document.getElementById('thVal').textContent = s.threshold ?? 60;
     document.getElementById('keywords').value = (s.keywords||[]).join(', ');
+    document.getElementById('logAll').checked = s.logAll !== false;
     if(s._warning) setMsg('saveMsg', 'Storage not connected yet — showing defaults.');
   }catch(e){ setMsg('saveMsg','Could not load settings.'); }
 }
@@ -121,7 +129,8 @@ async function save(){
   const body = {
     profile: document.getElementById('profile').value,
     threshold: Number(document.getElementById('threshold').value),
-    keywords: document.getElementById('keywords').value.split(',').map(s=>s.trim()).filter(Boolean)
+    keywords: document.getElementById('keywords').value.split(',').map(s=>s.trim()).filter(Boolean),
+    logAll: document.getElementById('logAll').checked
   };
   try{
     const r = await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -172,12 +181,21 @@ async function loadTenders(){
   try{
     const items = await (await fetch('/api/tenders')).json();
     if(!items.length){ el.innerHTML='<div class="empty">Nothing captured yet. Relevant changes will appear here.</div>'; return; }
-    el.innerHTML = items.map(t=>'<div class="card"><div class="cardtop"><b>'+esc(t.title||'Untitled')+
-      '</b><span class="badge">'+(t.score??'')+'</span></div><div class="muted">'+esc(t.source||'')+
-      (t.category?' · '+esc(t.category):'')+(t.deadline?' · closes '+esc(t.deadline):'')+'</div>'+
-      (t.rationale?'<div>'+esc(t.rationale)+'</div>':'')+
-      (t.url?'<div><a href="'+esc(t.url)+'" target="_blank" rel="noreferrer">Open source page</a></div>':'')+
-      '</div>').join('');
+    el.innerHTML = items.map(t=>{
+      const st = t.status || (t.relevant?'kept':'');
+      const label = {kept:'KEPT', dropped:'not relevant', 'no-keyword':'filtered free', empty:'empty', error:'error'}[st] || st;
+      const colour = {kept:'var(--yes)', dropped:'var(--no)', 'no-keyword':'var(--no)', empty:'#a16207', error:'#b91c1c'}[st] || 'var(--no)';
+      return '<div class="card" style="border-left:4px solid '+colour+'">'+
+        '<div class="cardtop"><b>'+esc(t.title||'Untitled')+'</b>'+
+        (t.score!=null?'<span class="badge">'+t.score+'</span>':'')+'</div>'+
+        '<div class="muted">'+(label?'<b>'+esc(label)+'</b> · ':'')+esc(t.source||'unknown source')+
+        (t.category?' · '+esc(t.category):'')+(t.deadline?' · closes '+esc(t.deadline):'')+
+        (t.savedAt?' · '+esc(new Date(t.savedAt).toLocaleString()):'')+'</div>'+
+        (t.rationale?'<div>'+esc(t.rationale)+'</div>':'')+
+        (t.preview?'<div class="muted" style="margin-top:6px;font-family:monospace;font-size:12px;white-space:pre-wrap">'+esc(t.preview)+'</div>':'')+
+        (t.url?'<div style="margin-top:6px"><a href="'+esc(t.url)+'" target="_blank" rel="noreferrer">Open source page</a></div>':'')+
+        '</div>';
+    }).join('');
   }catch(e){ el.innerHTML='<div class="empty">Could not load tenders.</div>'; }
 }
 
