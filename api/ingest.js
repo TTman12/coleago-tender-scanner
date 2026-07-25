@@ -33,16 +33,26 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST' });
 
   // Only your change detector may come through this door.
-  const auth = req.headers.authorization || '';
-  if (auth !== `Bearer ${process.env.INGEST_SECRET}`) {
+  // Accepts either an Authorization header OR ?key=... on the URL,
+  // because some monitoring tools make custom headers awkward.
+  const secret = process.env.INGEST_SECRET;
+  const headerAuth = (req.headers.authorization || '').replace('Bearer ', '').trim();
+  const queryAuth = ((req.query && req.query.key) || '').toString().trim();
+  if (!secret || (headerAuth !== secret && queryAuth !== secret)) {
     return res.status(401).json({ error: 'unauthorized' });
   }
 
-  const body = req.body || {};
-  const source = body.source || '';
-  const url = body.url || '';
-  const text = (body.changed_text || '').trim();
-  const isTest = body.test === true; // test mode: judge but don't save or email
+  // Body may arrive already-parsed or as a raw string.
+  let body = req.body || {};
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch { body = { changed_text: body }; }
+  }
+
+  const source = body.source || body.title || '';
+  const url = body.url || body.watch_url || '';
+  // Accept several field names so different tools work without fuss.
+  const text = String(body.changed_text || body.diff || body.message || body.body || '').trim();
+  const isTest = body.test === true || body.test === 'true';
 
   if (!text) return res.status(200).json({ skipped: true, reason: 'empty' });
 
