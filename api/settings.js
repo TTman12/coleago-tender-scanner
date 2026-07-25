@@ -13,6 +13,7 @@ Score 31-69 if genuinely unclear.`,
   keywords: ['tender', 'rfp', 'rfq', 'proposal', 'expression of interest', 'eoi',
     'procurement', 'consult', 'advisory', 'study', "appel d'offre", 'bid',
     'terms of reference', 'invitation to bid'],
+  logAll: true, // VERIFICATION MODE: record every notification, not just the keepers
 };
 
 async function redis(command) {
@@ -45,6 +46,7 @@ export default async function handler(req, res) {
     if (typeof b.profile === 'string') next.profile = b.profile;
     if (b.threshold != null) next.threshold = Number(b.threshold);
     if (Array.isArray(b.keywords)) next.keywords = b.keywords;
+    if (b.logAll != null) next.logAll = !!b.logAll;
     try {
       await redis(['SET', 'coleago:settings', JSON.stringify(next)]);
       return res.status(200).json(next);
