@@ -11,9 +11,7 @@ Score 70-100 if the text describes consultancy, advisory, study, valuation, mode
 Score 0-30 for equipment supply, construction, cabling, vehicles, cleaning, catering, staffing, office IT, or notices with no consulting scope.
 Score 31-69 if genuinely unclear.`,
   threshold: 60,
-  keywords: ['tender', 'rfp', 'rfq', 'proposal', 'expression of interest', 'eoi',
-    'procurement', 'consult', 'advisory', 'study', "appel d'offre", 'bid',
-    'terms of reference', 'invitation to bid'],
+  keywords: ["tender", "tenders", "tendering", "invitation to tender", "invitation to bid", "itb", "itt", "request for proposal", "request for proposals", "rfp", "request for quotation", "rfq", "request for information", "rfi", "expression of interest", "expressions of interest", "eoi", "call for proposals", "call for tenders", "call for bids", "procurement", "procurement notice", "terms of reference", "tor", "bid", "bidding", "bidder", "solicitation", "prequalification", "pre-qualification", "shortlist", "framework agreement", "contract notice", "contract award", "award notice", "submission deadline", "closing date", "consultancy", "consultancy services", "consulting services", "consultant", "consultants", "advisory services", "technical assistance", "scope of work", "statement of work", "request for services", "competitive bidding", "procure", "spectrum", "spectrum strategy", "spectrum valuation", "spectrum pricing", "spectrum auction", "spectrum award", "spectrum assignment", "spectrum renewal", "spectrum licence", "spectrum license", "licence renewal", "license renewal", "auction design", "auction", "reserve price", "refarming", "band plan", "frequency", "frequency assignment", "frequency allocation", "radio spectrum", "5g", "4g", "lte", "imt", "mmwave", "millimetre wave", "network strategy", "network planning", "network sharing", "infrastructure sharing", "ran", "radio access network", "business modelling", "business modeling", "financial model", "financial modelling", "business plan", "business planning", "cost model", "cost modelling", "lric", "bu-lric", "cost of capital", "wacc", "tariff", "tariff review", "pricing review", "price review", "benchmarking", "benchmark study", "regulatory", "regulation", "regulatory framework", "regulatory advisory", "policy", "policy advisory", "policy review", "universal service", "universal access", "uso", "interconnection", "interconnect", "market study", "market analysis", "market review", "demand study", "demand forecast", "significant market power", "smp", "competition assessment", "feasibility study", "feasibility", "techno-economic", "due diligence", "valuation", "transaction advisory", "mergers and acquisitions", "m&a", "acquisition", "divestment", "broadband plan", "national broadband", "broadband strategy", "digital strategy", "digital transformation", "fibre", "fiber", "ftth", "fttx", "backbone", "backhaul", "tower", "towerco", "passive infrastructure", "satellite", "leo", "direct-to-device", "d2d", "mvno", "numbering", "numbering plan", "quality of service", "qos", "coverage obligation", "spectrum audit", "spectrum monitoring", "training", "capacity building", "workshop", "seminar", "masterclass", "study", "strategy", "review", "assessment", "analysis", "audit", "roadmap", "white paper", "impact assessment", "cost benefit analysis", "appel d'offres", "appel d offres", "appels d'offres", "avis d'appel d'offres", "aoo", "aoi", "manifestation d'intérêt", "avis de manifestation d'intérêt", "ami", "demande de propositions", "consultation", "conseil", "étude", "études", "marché public", "marchés publics", "cahier des charges", "termes de référence", "soumission", "adjudication", "attribution", "préqualification", "spectre", "fréquences", "enchères", "licence", "réglementation", "régulation", "formation", "expertise", "assistance technique", "faisabilité", "évaluation", "stratégie", "licitación", "licitaciones", "concurso", "concurso público", "convocatoria", "pliego", "pliego de condiciones", "términos de referencia", "expresión de interés", "manifestación de interés", "propuesta", "solicitud de propuestas", "contratación", "contratación pública", "adjudicación", "consultoría", "consultor", "asesoría", "estudio", "estudios", "espectro", "frecuencias", "subasta", "licencia", "regulación", "normativa", "formación", "capacitación", "viabilidad", "evaluación", "estrategia", "edital", "licitação", "proposta", "pedido de propostas", "manifestação de interesse", "termos de referência", "aquisição", "adjudicação", "consultoria", "assessoria", "estudo", "frequências", "leilão", "licença", "regulamentação", "formação", "capacitação", "viabilidade", "avaliação", "estratégia", "gara", "bando", "bando di gara", "appalto", "offerta", "consulenza", "studio", "spettro", "frequenze", "ausschreibung", "vergabe", "angebot", "beratung", "studie", "frequenz", "spektrum", "lizenz", "aanbesteding", "offerte", "advies", "onderzoek", "مناقصة", "مناقصات", "عطاء", "عطاءات", "دعوة", "استدراج عروض", "طلب عروض", "إعلان", "استشارة", "استشاري", "دراسة", "الطيف", "الترددات", "مزاد", "ترخيص", "تنظيم", "تدريب", "تقييم", "тендер", "закупка", "закупки", "конкурс", "запрос предложений", "заявка", "консультация", "консультант", "исследование", "спектр", "частоты", "аукцион", "лицензия", "регулирование", "обучение", "ihale", "teklif", "danışmanlık", "etüt", "frekans", "lisans", "lelang", "pengadaan", "konsultasi", "studi", "frekuensi", "izin", "zabuni", "ushauri", "utafiti"],
   logAll: true, // VERIFICATION MODE: record every notification, not just the keepers
 };
 
@@ -92,8 +90,15 @@ export default async function handler(req, res) {
   }
 
   // --- FREE FILTER: skip Claude entirely if nothing tender-ish is present ---
+  // Three ways a change gets through:
+  //   1. no keywords configured at all  -> the gate is off
+  //   2. the text uses a non-Latin script -> Latin keywords could never match it,
+  //      so let Claude read it rather than silently discarding it
+  //   3. a keyword actually appears
   const hay = text.toLowerCase();
-  const matched = (settings.keywords || []).some((k) => hay.includes(String(k).toLowerCase()));
+  const list = settings.keywords || [];
+  const nonLatin = /[\u0600-\u06FF\u0400-\u04FF\u0370-\u03FF\u0590-\u05FF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF\u0E00-\u0E7F\u0900-\u097F\u1200-\u137F]/.test(text);
+  const matched = list.length === 0 || nonLatin || list.some((k) => hay.includes(String(k).toLowerCase()));
   if (!matched) {
     console.log('INGEST no-keyword |', source, url);
     if (logAll && !isTest) await record({ ...base, status: 'no-keyword', title: '(no tender keywords)' });
@@ -115,8 +120,16 @@ export default async function handler(req, res) {
         max_tokens: 400,
         system: settings.profile + `
 
+The notice may be written in ANY language. Always reply in English: translate the title,
+category and rationale into clear English regardless of the original language. Judge the
+notice on its meaning, not on which language it is written in.
+
 Reply with ONLY a JSON object, no other text:
-{"title":"","category":"","deadline":"","score":0,"rationale":""}
+{"title":"","category":"","deadline":"","score":0,"rationale":"","language":""}
+"title", "category" and "rationale" must be in English.
+"language" is the English name of the original language (for example "French", "Arabic",
+"Portuguese"), or "English" if it was already English.
+"deadline" should be an ISO date (YYYY-MM-DD) where one is given, otherwise "".
 score is 0-100. Never invent details not in the text.`,
         messages: [{
           role: 'user',
