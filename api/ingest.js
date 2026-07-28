@@ -31,10 +31,12 @@ async function redis(command) {
 }
 
 // Saves a record of what arrived and what we decided.
+// Stored in a hash keyed by id so it can later be starred, opened or binned.
 async function record(entry) {
   try {
-    await redis(['LPUSH', 'coleago:tenders', JSON.stringify(entry)]);
-    await redis(['LTRIM', 'coleago:tenders', '0', '499']);
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const full = { id, opened: false, starred: false, ...entry };
+    await redis(['HSET', 'coleago:records', id, JSON.stringify(full)]);
   } catch (e) {
     console.log('could not save record:', String(e.message || e));
   }
