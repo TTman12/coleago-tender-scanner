@@ -28,6 +28,44 @@ async function redis(command) {
   return j.result;
 }
 
+// Runs several Redis commands in one round trip where possible.
+async function redisPipeline(commands) {
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return;
+  try {
+    const r = await fetch(url.replace(/\/$/, '') + '/pipeline', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(commands),
+    });
+    if (r.ok) return await r.json();
+  } catch (e) { /* fall through */ }
+  // Fallback: run them one at a time.
+  for (const c of commands) { try { await redis(c); } catch (e) {} }
+}
+
+// Running totals, kept separately from the records themselves so that the
+// numbers survive verification mode being switched off, items being binned,
+// and old records being purged.
+const STATS = 'coleago:stats';
+const SOURCES = 'coleago:sources';
+
+async function bump(fields, source) {
+  const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD, UTC
+  const cmds = [];
+  for (const [name, by] of Object.entries(fields)) {
+    if (by) cmds.push(['HINCRBY', STATS, day + ':' + name, String(by)]);
+  }
+  if (source) {
+    const key = String(source).slice(0, 60);
+    if (fields.received) cmds.push(['HINCRBY', SOURCES, key + '|received', '1']);
+    if (fields.kept)     cmds.push(['HINCRBY', SOURCES, key + '|kept', '1']);
+    if (fields.judged)   cmds.push(['HINCRBY', SOURCES, key + '|judged', '1']);
+  }
+  if (cmds.length) await redisPipeline(cmds);
+}
+
 // Saves a record of what arrived and what we decided.
 // Stored in a hash keyed by id so it can later be starred, opened or binned.
 async function record(entry) {
@@ -82,9 +120,12 @@ export default async function handler(req, res) {
     preview: text.slice(0, 300), // what actually arrived, for verification
   };
 
+  if (!isTest) await bump({ received: 1 }, source);
+
   // --- nothing in the payload ---
   if (!text) {
     console.log('INGEST empty |', source, url);
+    if (!isTest) await bump({ empty: 1 });
     if (logAll && !isTest) await record({ ...base, status: 'empty', title: '(empty notification)' });
     return res.status(200).json({ skipped: true, reason: 'empty', source, url });
   }
@@ -101,12 +142,13 @@ export default async function handler(req, res) {
   const matched = list.length === 0 || nonLatin || list.some((k) => hay.includes(String(k).toLowerCase()));
   if (!matched) {
     console.log('INGEST no-keyword |', source, url);
+    if (!isTest) await bump({ gated: 1 });
     if (logAll && !isTest) await record({ ...base, status: 'no-keyword', title: '(no tender keywords)' });
     return res.status(200).json({ skipped: true, reason: 'no keyword match', source, url });
   }
 
   // THE JUDGE: one cheap Claude call.
-  let verdict;
+  let verdict, usage = {};
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -141,9 +183,12 @@ score is 0-100. Never invent details not in the text.`,
     if (data.error) throw new Error(data.error.message || 'Claude error');
     const raw = (data.content || []).map((c) => c.text || '').join('');
     verdict = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    // Real token usage, so cost reporting is measured rather than estimated.
+    usage = data.usage || {};
   } catch (e) {
     const msg = String(e.message || e);
     console.log('INGEST judge-failed |', source, '|', msg);
+    if (!isTest) await bump({ judged: 1, errors: 1 }, source);
     if (logAll && !isTest) await record({ ...base, status: 'error', title: '(judge failed)', rationale: msg });
     return res.status(500).json({ error: 'judge failed', detail: msg });
   }
@@ -151,12 +196,26 @@ score is 0-100. Never invent details not in the text.`,
   verdict.relevant = Number(verdict.score || 0) >= Number(settings.threshold || 60);
   console.log('INGEST', verdict.relevant ? 'KEPT' : 'dropped', '| score', verdict.score, '|', source);
 
+  if (!isTest) {
+    await bump({
+      judged: 1,
+      kept: verdict.relevant ? 1 : 0,
+      in_tokens: Number(usage.input_tokens || 0),
+      out_tokens: Number(usage.output_tokens || 0),
+    }, source);
+  }
+
   // Test mode stops here — nothing saved, nothing emailed.
   if (isTest) return res.status(200).json({ verdict, source, url });
 
   // Save keepers always; save the drops too while verification mode is on.
   if (verdict.relevant || logAll) {
-    await record({ ...base, ...verdict, status: verdict.relevant ? 'kept' : 'dropped' });
+    await record({
+      ...base, ...verdict,
+      status: verdict.relevant ? 'kept' : 'dropped',
+      inTokens: Number(usage.input_tokens || 0),
+      outTokens: Number(usage.output_tokens || 0),
+    });
   }
 
   // EMAIL TO COLEAGO - only for genuine keepers, and only once configured.
