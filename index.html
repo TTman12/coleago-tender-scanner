@@ -119,7 +119,19 @@
   }
 
   /* ---------- keyword chips ---------- */
-  .chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:10px}
+  .chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; position:relative}
+  .chips.collapsed{max-height:104px; overflow:hidden}
+  .chips.collapsed::after{
+    content:''; position:absolute; left:0; right:0; bottom:0; height:34px;
+    background:linear-gradient(to bottom, rgba(255,255,255,0), #fff);
+    pointer-events:none;
+  }
+  .morelink{
+    all:unset; cursor:pointer; color:var(--brand); font-size:13px; font-weight:600;
+    margin-top:10px; display:inline-block;
+  }
+  .morelink:hover{text-decoration:underline}
+  .morelink:focus-visible{outline:2px solid var(--brand); outline-offset:2px}
   .chip{
     display:inline-flex; align-items:center; gap:7px;
     background:var(--surface); border:1px solid var(--line); border-radius:999px;
@@ -146,6 +158,7 @@
   .iconbtn:focus-visible{outline:2px solid var(--brand); outline-offset:1px}
   .iconbtn.starred{color:#B8860B; border-color:#E8D9A8; background:#FDF9EC}
   .iconbtn.danger:hover{border-color:var(--error); color:var(--error)}
+  .langtag{background:#EEF3F9; color:var(--brand); border-radius:4px; padding:1px 6px; font-weight:600; font-size:11.5px}
   .binmeta{font-size:12px; color:var(--empty); font-weight:600; margin-top:8px}
 
   @media (max-width:760px){
@@ -204,10 +217,15 @@
       </div>
 
       <div class="field">
-        <label for="kwInput">Keyword gate</label>
+        <label for="kwInput">Keyword gate <span class="msg" id="kwCount" style="font-weight:400"></span></label>
         <input type="text" id="kwInput" placeholder="Type a keyword and press Enter" autocomplete="off">
-        <p class="note">If none of these appear in a change, it is discarded before reaching the AI, at no cost.</p>
-        <div class="chips" id="chips"></div>
+        <p class="note">If none of these appear in a change, it is discarded before reaching the AI, at no cost. Text in a non-Latin script always goes through, and clearing the list altogether turns the gate off.</p>
+        <div class="chips collapsed" id="chips"></div>
+        <button type="button" class="morelink hide" id="moreBtn" onclick="toggleChips()"></button>
+        <div class="actions" style="margin-top:12px">
+          <button class="ghost" type="button" onclick="restoreDefaultKeywords()">Load the full default list</button>
+          <button class="ghost" type="button" onclick="clearKeywords()">Clear all</button>
+        </div>
       </div>
 
       <div class="field">
@@ -250,7 +268,7 @@
   <!-- ================= OPPORTUNITIES ================= -->
   <section id="paneT" class="hide">
     <h1>Opportunities</h1>
-    <p class="lede">Newest first. While every notification is being recorded, this also shows what was discarded and why.</p>
+    <p class="lede">Newest first, translated into English. While every notification is being recorded, this also shows what was discarded and why.</p>
     <div class="actions" style="margin-top:0;margin-bottom:18px">
       <button class="ghost" onclick="loadRecords()">Refresh</button>
       <button class="ghost" onclick="markAllRead()">Mark all as read</button>
@@ -309,27 +327,60 @@ async function loadSettings(){
   }catch(e){ setMsg('saveMsg','Could not load the parameters.'); }
 }
 
+let CHIPS_OPEN = false;
+
 function renderChips(){
   const box = document.getElementById('chips');
+  const btn = document.getElementById('moreBtn');
+  document.getElementById('kwCount').textContent = KEYWORDS.length ? '· '+KEYWORDS.length+' terms' : '';
+
   if(!KEYWORDS.length){
     box.innerHTML = '<span class="msg">No keywords yet, so every change will be sent to the AI.</span>';
+    box.classList.remove('collapsed');
+    btn.classList.add('hide');
     return;
   }
+
   box.innerHTML = KEYWORDS.map((k,i)=>
     '<span class="chip">'+esc(k)+
     '<button type="button" title="Remove" aria-label="Remove '+esc(k)+'" onclick="removeKeyword('+i+')">&times;</button></span>'
   ).join('');
+
+  box.classList.toggle('collapsed', !CHIPS_OPEN);
+
+  // Only offer the toggle if the list is actually taller than the collapsed box.
+  const overflowing = CHIPS_OPEN || box.scrollHeight > box.clientHeight + 4;
+  btn.classList.toggle('hide', !overflowing);
+  btn.textContent = CHIPS_OPEN ? 'Show fewer' : 'Show all '+KEYWORDS.length+' keywords';
 }
+
+function toggleChips(){ CHIPS_OPEN = !CHIPS_OPEN; renderChips(); }
 
 function addKeyword(){
   const inp = document.getElementById('kwInput');
-  const val = inp.value.trim().toLowerCase();
-  if(!val) return;
-  if(!KEYWORDS.some(k=>k.toLowerCase()===val)) KEYWORDS.push(val);
+  // Accepts one word, or a whole comma-separated list pasted in at once.
+  const parts = inp.value.split(',').map(v=>v.trim().toLowerCase()).filter(Boolean);
+  if(!parts.length) return;
+  let added=0;
+  for(const val of parts){
+    if(!KEYWORDS.some(k=>k.toLowerCase()===val)){ KEYWORDS.push(val); added++; }
+  }
   inp.value='';
   renderChips();
+  if(parts.length>1) setMsg('saveMsg', 'Added '+added+' keyword'+(added===1?'':'s')+'. Remember to save.');
+}
+
+async function restoreDefaultKeywords(){
+  setMsg('saveMsg','Loading the full list…');
+  try{
+    const d = await (await fetch('/api/settings?defaults=1')).json();
+    KEYWORDS = Array.isArray(d.keywords) ? d.keywords.slice() : KEYWORDS;
+    renderChips();
+    setMsg('saveMsg','Loaded '+KEYWORDS.length+' keywords. Press Save parameters to keep them.');
+  }catch(e){ setMsg('saveMsg','Could not load the default list.'); }
 }
 function removeKeyword(i){ KEYWORDS.splice(i,1); renderChips(); }
+function clearKeywords(){ KEYWORDS=[]; renderChips(); setMsg('saveMsg','Cleared. With no keywords the gate is off — save to apply.'); }
 
 document.getElementById('kwInput').addEventListener('keydown', e=>{
   if(e.key==='Enter' || e.key===','){ e.preventDefault(); addKeyword(); }
@@ -462,6 +513,7 @@ function card(t){
     (t.score!=null?'<span class="score">'+esc(t.score)+'</span>':'')+'</div>'+
     '<div class="meta"><span class="tag" style="color:'+colour+'">'+esc(label)+'</span> · '+
       esc(t.source||'unknown source')+
+      (t.language && t.language.toLowerCase()!=='english' ? ' · <span class="langtag">translated from '+esc(t.language)+'</span>' : '')+
       (t.category?' · '+esc(t.category):'')+
       (t.deadline?' · closes '+esc(t.deadline):'')+
       (t.savedAt?' · '+esc(new Date(t.savedAt).toLocaleString()):'')+'</div>'+
