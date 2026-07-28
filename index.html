@@ -22,20 +22,19 @@
     --font: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   }
   *{box-sizing:border-box}
-  html,body{height:100%}
   body{
-    margin:0; display:flex; min-height:100vh;
-    background:#fff; color:var(--ink);
+    margin:0; background:#fff; color:var(--ink);
     font-family:var(--font); font-size:15px; line-height:1.55;
     -webkit-font-smoothing:antialiased;
   }
 
-  /* ---------- left rail ---------- */
+  /* ---------- left rail: fixed, always full height ---------- */
   .rail{
-    width:var(--rail); flex:0 0 var(--rail);
+    position:fixed; top:0; left:0; bottom:0;
+    width:var(--rail);
     background:var(--brand); color:#fff;
     display:flex; flex-direction:column;
-    padding:26px 0 20px;
+    padding:26px 0 20px; overflow-y:auto; z-index:10;
   }
   .logo{padding:0 24px 30px}
   .logo svg{width:158px; height:auto; display:block}
@@ -57,7 +56,7 @@
   }
 
   /* ---------- main ---------- */
-  main{flex:1; min-width:0; padding:38px 44px 70px; max-width:920px}
+  main{margin-left:var(--rail); padding:38px 44px 70px; max-width:1020px}
   h1{font-size:23px; font-weight:600; margin:0 0 4px; letter-spacing:-.01em}
   h2{font-size:16px; font-weight:600; margin:0 0 4px}
   .lede{color:var(--ink-soft); font-size:13.5px; margin:0 0 26px}
@@ -114,16 +113,50 @@
   .empty-state{border:1px dashed var(--line); border-radius:10px; padding:34px; text-align:center; color:var(--ink-soft)}
   .hide{display:none}
 
+  .rail nav button .badge{
+    background:rgba(255,255,255,.22); color:#fff; border-radius:999px;
+    padding:1px 7px; font-size:11px; font-weight:700; margin-left:7px;
+  }
+
+  /* ---------- keyword chips ---------- */
+  .chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:10px}
+  .chip{
+    display:inline-flex; align-items:center; gap:7px;
+    background:var(--surface); border:1px solid var(--line); border-radius:999px;
+    padding:4px 6px 4px 12px; font-size:13px;
+  }
+  .chip button{
+    all:unset; cursor:pointer; width:17px; height:17px; border-radius:50%;
+    display:grid; place-items:center; font-size:13px; line-height:1;
+    color:var(--ink-soft); background:#fff; border:1px solid var(--line);
+  }
+  .chip button:hover{background:var(--error); border-color:var(--error); color:#fff}
+  .chip button:focus-visible{outline:2px solid var(--brand); outline-offset:1px}
+
+  /* ---------- record actions ---------- */
+  .rec.unread{background:#F4F8FC; border-color:#CBDDEE}
+  .rec.unread .title{font-weight:700}
+  .dot{width:8px; height:8px; border-radius:50%; background:var(--brand); flex:none}
+  .rec .acts{display:flex; gap:8px; align-items:center; margin-top:10px; flex-wrap:wrap}
+  .iconbtn{
+    all:unset; cursor:pointer; font-size:12.5px; font-weight:600;
+    padding:5px 11px; border-radius:6px; border:1px solid var(--line); color:var(--ink-soft);
+  }
+  .iconbtn:hover{border-color:var(--brand); color:var(--brand)}
+  .iconbtn:focus-visible{outline:2px solid var(--brand); outline-offset:1px}
+  .iconbtn.starred{color:#B8860B; border-color:#E8D9A8; background:#FDF9EC}
+  .iconbtn.danger:hover{border-color:var(--error); color:var(--error)}
+  .binmeta{font-size:12px; color:var(--empty); font-weight:600; margin-top:8px}
+
   @media (max-width:760px){
-    body{flex-direction:column}
-    .rail{width:100%; flex:none; flex-direction:row; align-items:center; padding:12px 16px; gap:8px; flex-wrap:wrap}
+    .rail{position:static; width:100%; flex-direction:row; align-items:center; padding:12px 16px; gap:8px; flex-wrap:wrap; bottom:auto}
     .logo{padding:0 14px 0 0}
     .logo svg{width:112px}
     .rail nav{flex-direction:row}
     .rail nav button{padding:8px 14px; border-left:0; border-bottom:3px solid transparent}
     .rail nav button.on{border-left:0; border-bottom-color:#fff}
     .rail .foot{display:none}
-    main{padding:24px 18px 60px}
+    main{margin-left:0; padding:24px 18px 60px}
   }
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -143,7 +176,9 @@
 
   <nav>
     <button id="navP" class="on" onclick="show('p')">Parameters</button>
-    <button id="navT" onclick="show('t')">Tenders</button>
+    <button id="navT" onclick="show('t')">Opportunities<span class="badge hide" id="unreadBadge">0</span></button>
+    <button id="navS" onclick="show('s')">Saved<span class="badge hide" id="savedBadge">0</span></button>
+    <button id="navB" onclick="show('b')">Bin<span class="badge hide" id="binBadge">0</span></button>
   </nav>
 
   <div class="foot">Tender Scanner</div>
@@ -169,9 +204,10 @@
       </div>
 
       <div class="field">
-        <label for="keywords">Keyword gate</label>
-        <input type="text" id="keywords">
-        <p class="note">Comma separated. If none of these appear in a change, it is discarded before reaching the AI, at no cost.</p>
+        <label for="kwInput">Keyword gate</label>
+        <input type="text" id="kwInput" placeholder="Type a keyword and press Enter" autocomplete="off">
+        <p class="note">If none of these appear in a change, it is discarded before reaching the AI, at no cost.</p>
+        <div class="chips" id="chips"></div>
       </div>
 
       <div class="field">
@@ -211,44 +247,102 @@
     </div>
   </section>
 
-  <!-- ================= TENDERS ================= -->
+  <!-- ================= OPPORTUNITIES ================= -->
   <section id="paneT" class="hide">
     <h1>Opportunities</h1>
     <p class="lede">Newest first. While every notification is being recorded, this also shows what was discarded and why.</p>
     <div class="actions" style="margin-top:0;margin-bottom:18px">
-      <button class="ghost" onclick="loadTenders()">Refresh</button>
+      <button class="ghost" onclick="loadRecords()">Refresh</button>
+      <button class="ghost" onclick="markAllRead()">Mark all as read</button>
     </div>
-    <div id="list"><p class="msg">Loading…</p></div>
+    <div id="listT"><p class="msg">Loading…</p></div>
+  </section>
+
+  <!-- ================= SAVED ================= -->
+  <section id="paneS" class="hide">
+    <h1>Saved</h1>
+    <p class="lede">Opportunities you have starred.</p>
+    <div id="listS"><p class="msg">Loading…</p></div>
+  </section>
+
+  <!-- ================= BIN ================= -->
+  <section id="paneB" class="hide">
+    <h1>Bin</h1>
+    <p class="lede">Removed items are kept for 7 days, then deleted permanently.</p>
+    <div class="actions" style="margin-top:0;margin-bottom:18px">
+      <button class="ghost" onclick="emptyBin()">Empty the bin now</button>
+    </div>
+    <div id="listB"><p class="msg">Loading…</p></div>
   </section>
 </main>
 
 <script>
+/* ---------------- state ---------------- */
+let KEYWORDS = [];
+let RECORDS  = [];
+let BIN_DAYS = 7;
+let CURRENT  = 'p';
+
+/* ---------------- navigation ---------------- */
 function show(which){
-  document.getElementById('paneP').classList.toggle('hide', which!=='p');
-  document.getElementById('paneT').classList.toggle('hide', which!=='t');
-  document.getElementById('navP').classList.toggle('on', which==='p');
-  document.getElementById('navT').classList.toggle('on', which==='t');
-  if(which==='t') loadTenders();
+  CURRENT = which;
+  const panes = {p:'paneP', t:'paneT', s:'paneS', b:'paneB'};
+  const navs  = {p:'navP',  t:'navT',  s:'navS',  b:'navB'};
+  for(const k in panes){
+    document.getElementById(panes[k]).classList.toggle('hide', k!==which);
+    document.getElementById(navs[k]).classList.toggle('on', k===which);
+  }
+  if(which!=='p') loadRecords();
 }
 
+/* ---------------- parameters ---------------- */
 async function loadSettings(){
   try{
     const s = await (await fetch('/api/settings')).json();
     document.getElementById('profile').value = s.profile || '';
     document.getElementById('threshold').value = s.threshold ?? 60;
     document.getElementById('thVal').textContent = s.threshold ?? 60;
-    document.getElementById('keywords').value = (s.keywords||[]).join(', ');
     document.getElementById('logAll').checked = s.logAll !== false;
+    KEYWORDS = Array.isArray(s.keywords) ? s.keywords.slice() : [];
+    renderChips();
     if(s._warning) setMsg('saveMsg','Storage is not connected, so these are the defaults.');
   }catch(e){ setMsg('saveMsg','Could not load the parameters.'); }
 }
+
+function renderChips(){
+  const box = document.getElementById('chips');
+  if(!KEYWORDS.length){
+    box.innerHTML = '<span class="msg">No keywords yet, so every change will be sent to the AI.</span>';
+    return;
+  }
+  box.innerHTML = KEYWORDS.map((k,i)=>
+    '<span class="chip">'+esc(k)+
+    '<button type="button" title="Remove" aria-label="Remove '+esc(k)+'" onclick="removeKeyword('+i+')">&times;</button></span>'
+  ).join('');
+}
+
+function addKeyword(){
+  const inp = document.getElementById('kwInput');
+  const val = inp.value.trim().toLowerCase();
+  if(!val) return;
+  if(!KEYWORDS.some(k=>k.toLowerCase()===val)) KEYWORDS.push(val);
+  inp.value='';
+  renderChips();
+}
+function removeKeyword(i){ KEYWORDS.splice(i,1); renderChips(); }
+
+document.getElementById('kwInput').addEventListener('keydown', e=>{
+  if(e.key==='Enter' || e.key===','){ e.preventDefault(); addKeyword(); }
+  else if(e.key==='Backspace' && !e.target.value && KEYWORDS.length){ removeKeyword(KEYWORDS.length-1); }
+});
+document.getElementById('kwInput').addEventListener('blur', addKeyword);
 
 async function save(){
   setMsg('saveMsg','Saving…');
   const body = {
     profile: document.getElementById('profile').value,
     threshold: Number(document.getElementById('threshold').value),
-    keywords: document.getElementById('keywords').value.split(',').map(s=>s.trim()).filter(Boolean),
+    keywords: KEYWORDS,
     logAll: document.getElementById('logAll').checked
   };
   try{
@@ -258,6 +352,7 @@ async function save(){
   }catch(e){ setMsg('saveMsg','Not saved — the request failed.'); }
 }
 
+/* ---------------- sample scoring ---------------- */
 document.getElementById('secret').value = localStorage.getItem('coleago_secret') || '';
 document.getElementById('secret').addEventListener('change', e=>localStorage.setItem('coleago_secret', e.target.value));
 
@@ -294,42 +389,130 @@ async function runTest(){
   document.getElementById('testBtn').disabled = false;
 }
 
+/* ---------------- records ---------------- */
 const LABEL={kept:'Kept', dropped:'Below threshold', 'no-keyword':'No keywords', empty:'Nothing received', error:'Error'};
 const COLOUR={kept:'var(--kept)', dropped:'var(--dropped)', 'no-keyword':'var(--dropped)', empty:'var(--empty)', error:'var(--error)'};
 
-async function loadTenders(){
-  const el=document.getElementById('list');
-  el.innerHTML='<p class="msg">Loading…</p>';
+async function loadRecords(){
   try{
-    const items = await (await fetch('/api/tenders')).json();
-    if(!items.length){
-      el.innerHTML='<div class="empty-state">Nothing recorded yet. Opportunities appear here as soon as a watched page changes.</div>';
-      return;
-    }
-    el.innerHTML = items.map(t=>{
-      const st = t.status || (t.relevant?'kept':'dropped');
-      const label = LABEL[st] || st;
-      const colour = COLOUR[st] || 'var(--dropped)';
-      return '<div class="rec" style="border-left-color:'+colour+'">'+
-        '<div class="top"><span class="title">'+esc(t.title||'Untitled')+'</span>'+
-        (t.score!=null?'<span class="score">'+esc(t.score)+'</span>':'')+'</div>'+
-        '<div class="meta"><span class="tag" style="color:'+colour+'">'+esc(label)+'</span> · '+
-        esc(t.source||'unknown source')+
-        (t.category?' · '+esc(t.category):'')+
-        (t.deadline?' · closes '+esc(t.deadline):'')+
-        (t.savedAt?' · '+esc(new Date(t.savedAt).toLocaleString()):'')+'</div>'+
-        (t.rationale?'<div class="why">'+esc(t.rationale)+'</div>':'')+
-        (t.preview?'<div class="raw">'+esc(t.preview)+'</div>':'')+
-        (t.url?'<a href="'+esc(t.url)+'" target="_blank" rel="noreferrer">Open the source page</a>':'')+
-        '</div>';
-    }).join('');
-  }catch(e){ el.innerHTML='<div class="empty-state">Could not load the opportunities. Refresh to try again.</div>'; }
+    const data = await (await fetch('/api/tenders')).json();
+    RECORDS  = data.records || [];
+    BIN_DAYS = data.binDays || 7;
+  }catch(e){ RECORDS = []; }
+  renderAll();
 }
 
+function renderAll(){
+  const live   = RECORDS.filter(r=>!r.deletedAt);
+  const saved  = live.filter(r=>r.starred);
+  const binned = RECORDS.filter(r=>r.deletedAt);
+  const unread = live.filter(r=>!r.opened).length;
+
+  setBadge('unreadBadge', unread);
+  setBadge('savedBadge', saved.length);
+  setBadge('binBadge', binned.length);
+
+  paint('listT', live,   'Nothing recorded yet. Opportunities appear here as soon as a watched page changes.');
+  paint('listS', saved,  'Nothing saved yet. Star an opportunity to keep it here.');
+  paint('listB', binned, 'The bin is empty.');
+}
+
+function setBadge(id,n){
+  const el=document.getElementById(id);
+  el.textContent=n;
+  el.classList.toggle('hide', !n);
+}
+
+function paint(elId, items, emptyText){
+  const el = document.getElementById(elId);
+  if(!items.length){ el.innerHTML = '<div class="empty-state">'+esc(emptyText)+'</div>'; return; }
+  el.innerHTML = items.map(card).join('');
+}
+
+function card(t){
+  const st = t.status || (t.relevant?'kept':'dropped');
+  const label = LABEL[st] || st;
+  const colour = COLOUR[st] || 'var(--dropped)';
+  const inBin = !!t.deletedAt;
+  const unread = !inBin && !t.opened;
+
+  let actions;
+  if(inBin){
+    const left = Math.max(0, BIN_DAYS - Math.floor((Date.now()-new Date(t.deletedAt).getTime())/86400000));
+    actions = '<div class="binmeta">Deleted permanently in '+left+' day'+(left===1?'':'s')+'</div>'+
+      '<div class="acts">'+
+      '<button class="iconbtn" onclick="act(event,\''+t.id+'\',\'restore\')">Restore</button>'+
+      '<button class="iconbtn danger" onclick="act(event,\''+t.id+'\',\'deleteForever\')">Delete now</button>'+
+      '</div>';
+  } else {
+    actions = '<div class="acts">'+
+      '<button class="iconbtn'+(t.starred?' starred':'')+'" onclick="act(event,\''+t.id+'\',\''+(t.starred?'unstar':'star')+'\')">'+
+        (t.starred?'★ Saved':'☆ Save')+'</button>'+
+      '<button class="iconbtn" onclick="act(event,\''+t.id+'\',\''+(t.opened?'unopen':'open')+'\')">'+
+        (t.opened?'Mark unread':'Mark read')+'</button>'+
+      '<button class="iconbtn danger" onclick="act(event,\''+t.id+'\',\'bin\')">Remove</button>'+
+      '</div>';
+  }
+
+  return '<div class="rec'+(unread?' unread':'')+'" style="border-left-color:'+colour+'"'+
+    (unread?' onclick="act(event,\''+t.id+'\',\'open\')"':'')+'>'+
+    '<div class="top"><span class="title">'+
+      (unread?'<span class="dot" style="display:inline-block;margin-right:7px"></span>':'')+
+      esc(t.title||'Untitled')+'</span>'+
+    (t.score!=null?'<span class="score">'+esc(t.score)+'</span>':'')+'</div>'+
+    '<div class="meta"><span class="tag" style="color:'+colour+'">'+esc(label)+'</span> · '+
+      esc(t.source||'unknown source')+
+      (t.category?' · '+esc(t.category):'')+
+      (t.deadline?' · closes '+esc(t.deadline):'')+
+      (t.savedAt?' · '+esc(new Date(t.savedAt).toLocaleString()):'')+'</div>'+
+    (t.rationale?'<div class="why">'+esc(t.rationale)+'</div>':'')+
+    (t.preview?'<div class="raw">'+esc(t.preview)+'</div>':'')+
+    (t.url?'<a href="'+esc(t.url)+'" target="_blank" rel="noreferrer" onclick="event.stopPropagation()">Open the source page</a>':'')+
+    actions+
+    '</div>';
+}
+
+/* optimistic update, then persist */
+async function act(ev, id, action){
+  if(ev) ev.stopPropagation();
+  const rec = RECORDS.find(r=>r.id===id);
+  if(rec){
+    if(action==='star') rec.starred=true;
+    else if(action==='unstar') rec.starred=false;
+    else if(action==='open') rec.opened=true;
+    else if(action==='unopen') rec.opened=false;
+    else if(action==='bin') rec.deletedAt=new Date().toISOString();
+    else if(action==='restore') delete rec.deletedAt;
+    else if(action==='deleteForever') RECORDS = RECORDS.filter(r=>r.id!==id);
+    renderAll();
+  }
+  try{
+    await fetch('/api/tenders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,id})});
+  }catch(e){ loadRecords(); }
+}
+
+async function markAllRead(){
+  const unread = RECORDS.filter(r=>!r.deletedAt && !r.opened);
+  unread.forEach(r=>r.opened=true);
+  renderAll();
+  for(const r of unread){
+    try{ await fetch('/api/tenders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'open',id:r.id})}); }catch(e){}
+  }
+}
+
+async function emptyBin(){
+  if(!confirm('Delete everything in the bin permanently?')) return;
+  RECORDS = RECORDS.filter(r=>!r.deletedAt);
+  renderAll();
+  try{ await fetch('/api/tenders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'emptyBin'})}); }catch(e){ loadRecords(); }
+}
+
+/* ---------------- helpers ---------------- */
 function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function setMsg(id,t){ document.getElementById(id).textContent=t; }
 
 loadSettings();
+loadRecords();
 </script>
 </body>
 </html>
