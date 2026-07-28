@@ -158,6 +158,39 @@
   .iconbtn:focus-visible{outline:2px solid var(--brand); outline-offset:1px}
   .iconbtn.starred{color:#B8860B; border-color:#E8D9A8; background:#FDF9EC}
   .iconbtn.danger:hover{border-color:var(--error); color:var(--error)}
+  .statgrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px}
+  .statcard{border:1px solid var(--line); border-radius:9px; padding:14px 16px}
+  .statcard .n{font-size:24px; font-weight:700; letter-spacing:-.02em}
+  .statcard .l{font-size:12px; color:var(--ink-soft); margin-top:2px}
+  .statcard .sub{font-size:11.5px; color:var(--ink-soft); margin-top:6px}
+
+  .chart{display:flex; align-items:flex-end; gap:3px; height:120px; margin-top:12px}
+  .chart .col{flex:1; display:flex; flex-direction:column-reverse; gap:1px; min-width:0; position:relative}
+  .chart .seg{width:100%; border-radius:1px}
+  .chart .col:hover::after{
+    content:attr(data-tip); position:absolute; bottom:100%; left:50%; transform:translateX(-50%);
+    background:var(--ink); color:#fff; font-size:11px; padding:5px 8px; border-radius:5px;
+    white-space:nowrap; z-index:5; margin-bottom:5px;
+  }
+  .chartkey{display:flex; gap:14px; margin-top:10px; font-size:12px; color:var(--ink-soft)}
+  .chartkey span{display:flex; align-items:center; gap:5px}
+  .swatch{width:10px; height:10px; border-radius:2px; display:inline-block}
+
+  table.data{width:100%; border-collapse:collapse; font-size:13.5px; margin-top:10px}
+  table.data th{text-align:left; font-size:12px; color:var(--ink-soft); font-weight:600; padding:6px 8px; border-bottom:1px solid var(--line)}
+  table.data td{padding:7px 8px; border-bottom:1px solid var(--line)}
+  table.data td.num{text-align:right; font-variant-numeric:tabular-nums}
+  table.data tr:last-child td{border-bottom:0}
+
+  .subtabs{display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 10px}
+  .subtab{
+    all:unset; cursor:pointer; padding:7px 14px; border-radius:7px;
+    border:1px solid var(--line); font-size:13.5px; font-weight:600; color:var(--ink-soft);
+  }
+  .subtab:hover{border-color:var(--brand); color:var(--brand)}
+  .subtab.on{background:var(--brand); border-color:var(--brand); color:#fff}
+  .subtab span{opacity:.75; font-weight:500}
+
   .langtag{background:#EEF3F9; color:var(--brand); border-radius:4px; padding:1px 6px; font-weight:600; font-size:11.5px}
   .binmeta{font-size:12px; color:var(--empty); font-weight:600; margin-top:8px}
 
@@ -188,10 +221,11 @@
   </div>
 
   <nav>
-    <button id="navP" class="on" onclick="show('p')">Parameters</button>
-    <button id="navT" onclick="show('t')">Opportunities<span class="badge hide" id="unreadBadge">0</span></button>
+    <button id="navT" class="on" onclick="show('t')">Opportunities<span class="badge hide" id="unreadBadge">0</span></button>
     <button id="navS" onclick="show('s')">Saved<span class="badge hide" id="savedBadge">0</span></button>
     <button id="navB" onclick="show('b')">Bin<span class="badge hide" id="binBadge">0</span></button>
+    <button id="navP" onclick="show('p')">Parameters</button>
+    <button id="navA" onclick="show('a')">Admin</button>
   </nav>
 
   <div class="foot">Tender Scanner</div>
@@ -199,7 +233,7 @@
 
 <main>
   <!-- ================= PARAMETERS ================= -->
-  <section id="paneP">
+  <section id="paneP" class="hide">
     <h1>Judging parameters</h1>
     <p class="lede">What the scanner treats as a relevant opportunity. Saved changes apply to the next incoming scan.</p>
 
@@ -266,9 +300,9 @@
   </section>
 
   <!-- ================= OPPORTUNITIES ================= -->
-  <section id="paneT" class="hide">
+  <section id="paneT">
     <h1>Opportunities</h1>
-    <p class="lede">Newest first, translated into English. While every notification is being recorded, this also shows what was discarded and why.</p>
+    <p class="lede">Notices that passed the relevance threshold, newest first, translated into English. Everything else is in Admin.</p>
     <div class="actions" style="margin-top:0;margin-bottom:18px">
       <button class="ghost" onclick="loadRecords()">Refresh</button>
       <button class="ghost" onclick="markAllRead()">Mark all as read</button>
@@ -281,6 +315,41 @@
     <h1>Saved</h1>
     <p class="lede">Opportunities you have starred.</p>
     <div id="listS"><p class="msg">Loading…</p></div>
+  </section>
+
+  <!-- ================= ADMIN ================= -->
+  <section id="paneA" class="hide">
+    <h1>Admin</h1>
+    <p class="lede">Everything the scanner has seen, and what it costs to run.</p>
+
+    <h2>Volume and cost</h2>
+    <div class="statgrid" id="statCards"><p class="msg">Loading…</p></div>
+
+    <div class="panel" style="margin-top:16px">
+      <label>Last 30 days</label>
+      <p class="note">Grey is everything received, blue is what reached the AI, green is what passed.</p>
+      <div class="chart" id="chart"></div>
+    </div>
+
+    <div class="panel">
+      <label>Cost</label>
+      <div id="costBox"><p class="msg">Loading…</p></div>
+    </div>
+
+    <div class="panel">
+      <label>By source</label>
+      <p class="note">Which watches produce volume, and which actually produce opportunities. Sources with lots of traffic and no hits are worth a tighter page filter.</p>
+      <div id="sourceBox"><p class="msg">Loading…</p></div>
+    </div>
+
+    <h2 style="margin-top:28px">Every notification</h2>
+    <div class="subtabs" id="subtabs">
+      <button class="subtab on" onclick="showAdmin('kept')"  id="stKept">Judged and passed <span id="cKept">0</span></button>
+      <button class="subtab" onclick="showAdmin('dropped')" id="stDropped">Judged but failed <span id="cDropped">0</span></button>
+      <button class="subtab" onclick="showAdmin('gate')"    id="stGate">Never judged <span id="cGate">0</span></button>
+    </div>
+    <p class="note" id="adminNote"></p>
+    <div id="listA"><p class="msg">Loading…</p></div>
   </section>
 
   <!-- ================= BIN ================= -->
@@ -304,13 +373,14 @@ let CURRENT  = 'p';
 /* ---------------- navigation ---------------- */
 function show(which){
   CURRENT = which;
-  const panes = {p:'paneP', t:'paneT', s:'paneS', b:'paneB'};
-  const navs  = {p:'navP',  t:'navT',  s:'navS',  b:'navB'};
+  const panes = {p:'paneP', t:'paneT', s:'paneS', b:'paneB', a:'paneA'};
+  const navs  = {p:'navP',  t:'navT',  s:'navS',  b:'navB',  a:'navA'};
   for(const k in panes){
     document.getElementById(panes[k]).classList.toggle('hide', k!==which);
     document.getElementById(navs[k]).classList.toggle('on', k===which);
   }
   if(which!=='p') loadRecords();
+  if(which==='a') loadStats();
 }
 
 /* ---------------- parameters ---------------- */
@@ -453,19 +523,57 @@ async function loadRecords(){
   renderAll();
 }
 
+function isKept(r){ return (r.status || (r.relevant?'kept':'dropped')) === 'kept'; }
+
 function renderAll(){
   const live   = RECORDS.filter(r=>!r.deletedAt);
+  const real   = live.filter(isKept);                 // the actual opportunities
   const saved  = live.filter(r=>r.starred);
   const binned = RECORDS.filter(r=>r.deletedAt);
-  const unread = live.filter(r=>!r.opened).length;
+  const unread = real.filter(r=>!r.opened).length;
 
   setBadge('unreadBadge', unread);
   setBadge('savedBadge', saved.length);
   setBadge('binBadge', binned.length);
 
-  paint('listT', live,   'Nothing recorded yet. Opportunities appear here as soon as a watched page changes.');
+  paint('listT', real,   'No opportunities yet. Anything that passes the relevance threshold appears here.');
   paint('listS', saved,  'Nothing saved yet. Star an opportunity to keep it here.');
   paint('listB', binned, 'The bin is empty.');
+
+  // admin buckets
+  const dropped = live.filter(r=>(r.status||'')==='dropped');
+  const gate    = live.filter(r=>['no-keyword','empty','error'].includes(r.status||''));
+  document.getElementById('cKept').textContent    = real.length;
+  document.getElementById('cDropped').textContent = dropped.length;
+  document.getElementById('cGate').textContent    = gate.length;
+  ADMIN_BUCKETS = { kept: real, dropped: dropped, gate: gate };
+  renderAdminList();
+}
+
+let ADMIN_BUCKETS = { kept:[], dropped:[], gate:[] };
+let ADMIN_VIEW = 'kept';
+const ADMIN_NOTE = {
+  kept:    'Passed the relevance threshold. These are the notices shown on the Opportunities page.',
+  dropped: 'The AI read these and scored them below the threshold. Worth skimming if you think something was missed — lower the threshold if so.',
+  gate:    'Discarded before reaching the AI, so these cost nothing. Mostly page noise. If real tenders are landing here, add a keyword.'
+};
+
+function showAdmin(which){
+  ADMIN_VIEW = which;
+  ['kept','dropped','gate'].forEach(k=>{
+    document.getElementById({kept:'stKept',dropped:'stDropped',gate:'stGate'}[k]).classList.toggle('on', k===which);
+  });
+  renderAdminList();
+}
+
+function renderAdminList(){
+  document.getElementById('adminNote').textContent = ADMIN_NOTE[ADMIN_VIEW] || '';
+  const empty = {
+    kept:'Nothing has passed the threshold yet.',
+    dropped:'Nothing has been judged and rejected yet.',
+    gate:'Nothing has been filtered out yet.'
+  }[ADMIN_VIEW];
+  paint('listA', ADMIN_BUCKETS[ADMIN_VIEW] || [], empty);
 }
 
 function setBadge(id,n){
@@ -557,6 +665,93 @@ async function emptyBin(){
   RECORDS = RECORDS.filter(r=>!r.deletedAt);
   renderAll();
   try{ await fetch('/api/tenders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'emptyBin'})}); }catch(e){ loadRecords(); }
+}
+
+/* ---------------- analytics ---------------- */
+let STATS = null;
+
+async function loadStats(){
+  try{
+    STATS = await (await fetch('/api/stats')).json();
+  }catch(e){ STATS = null; }
+  renderStats();
+}
+
+function n(x){ return (x||0).toLocaleString(); }
+function money(x){ return '$' + (x||0).toFixed(x < 1 ? 3 : 2); }
+
+function renderStats(){
+  const cards = document.getElementById('statCards');
+  if(!STATS){ cards.innerHTML = '<p class="msg">Could not load the figures.</p>'; return; }
+  const p = STATS.periods;
+
+  const cardHtml = (label, v) => {
+    const passRate = v.judged ? Math.round(100*v.kept/v.judged) : 0;
+    const savedPct = v.received ? Math.round(100*v.gated/v.received) : 0;
+    return '<div class="statcard">'+
+      '<div class="n">'+n(v.received)+'</div>'+
+      '<div class="l">changes received · '+label+'</div>'+
+      '<div class="sub">'+n(v.judged)+' judged · '+n(v.kept)+' passed'+
+      (v.judged?' ('+passRate+'%)':'')+'<br>'+
+      n(v.gated)+' filtered free'+(v.received?' ('+savedPct+'%)':'')+
+      '<br>'+money(v.cost)+' spent</div></div>';
+  };
+
+  cards.innerHTML =
+    cardHtml('today', p.today) +
+    cardHtml('last 7 days', p.week) +
+    cardHtml('last 30 days', p.month) +
+    cardHtml('all time', p.all);
+
+  // ---- chart ----
+  const chart = document.getElementById('chart');
+  const max = Math.max(1, ...STATS.series.map(d=>d.received));
+  chart.innerHTML = STATS.series.map(d=>{
+    const h = v => Math.round(100 * v / max);
+    const tip = d.day+': '+d.received+' received, '+d.judged+' judged, '+d.kept+' passed';
+    return '<div class="col" data-tip="'+esc(tip)+'">'+
+      '<div class="seg" style="height:'+h(d.received-d.judged)+'%;background:#E2E7EC"></div>'+
+      '<div class="seg" style="height:'+h(d.judged-d.kept)+'%;background:#9DC3E6"></div>'+
+      '<div class="seg" style="height:'+h(d.kept)+'%;background:var(--kept)"></div>'+
+      '</div>';
+  }).join('') ;
+  if(!chart.nextElementSibling || !chart.nextElementSibling.classList.contains('chartkey')){
+    chart.insertAdjacentHTML('afterend',
+      '<div class="chartkey">'+
+      '<span><i class="swatch" style="background:#E2E7EC"></i>filtered free</span>'+
+      '<span><i class="swatch" style="background:#9DC3E6"></i>judged, not relevant</span>'+
+      '<span><i class="swatch" style="background:var(--kept)"></i>passed</span></div>');
+  }
+
+  // ---- cost ----
+  const a = p.all;
+  document.getElementById('costBox').innerHTML =
+    '<table class="data">'+
+    '<tr><td>Spent so far (all time)</td><td class="num"><b>'+money(a.cost)+'</b></td></tr>'+
+    '<tr><td>Cost per judgement</td><td class="num">'+money(STATS.perJudgement)+'</td></tr>'+
+    '<tr><td>Projected monthly at this rate</td><td class="num"><b>'+money(STATS.projectedMonthly)+'</b></td></tr>'+
+    '<tr><td>Tokens used</td><td class="num">'+n(a.in_tokens)+' in · '+n(a.out_tokens)+' out</td></tr>'+
+    '<tr><td>Judgements skipped by the keyword gate</td><td class="num">'+n(a.gated)+
+      ' (saved about '+money(a.gated*STATS.perJudgement)+')</td></tr>'+
+    '<tr><td>Errors</td><td class="num">'+n(a.errors)+'</td></tr>'+
+    '</table>'+
+    '<p class="note">Based on '+STATS.pricing.inputPerM.toFixed(2)+' per million input tokens and '+
+    STATS.pricing.outputPerM.toFixed(2)+' per million output tokens, measured from actual usage. '+
+    'Projection uses '+STATS.activeDays+' active day'+(STATS.activeDays===1?'':'s')+' of data.</p>';
+
+  // ---- sources ----
+  const sb = document.getElementById('sourceBox');
+  if(!STATS.sources.length){ sb.innerHTML='<p class="msg">No source data yet.</p>'; }
+  else{
+    sb.innerHTML = '<table class="data"><tr><th>Source</th><th class="num">Received</th>'+
+      '<th class="num">Judged</th><th class="num">Passed</th><th class="num">Hit rate</th></tr>'+
+      STATS.sources.map(s=>{
+        const rate = s.judged ? Math.round(100*s.kept/s.judged)+'%' : '—';
+        return '<tr><td>'+esc(s.source)+'</td><td class="num">'+n(s.received)+
+          '</td><td class="num">'+n(s.judged)+'</td><td class="num">'+n(s.kept)+
+          '</td><td class="num">'+rate+'</td></tr>';
+      }).join('')+'</table>';
+  }
 }
 
 /* ---------------- helpers ---------------- */
