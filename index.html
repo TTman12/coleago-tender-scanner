@@ -670,10 +670,21 @@ async function emptyBin(){
 /* ---------------- analytics ---------------- */
 let STATS = null;
 
+let STATS_ERROR = '';
+
 async function loadStats(){
+  STATS = null; STATS_ERROR = '';
   try{
-    STATS = await (await fetch('/api/stats')).json();
-  }catch(e){ STATS = null; }
+    const r = await fetch('/api/stats');
+    const body = await r.text();
+    if(!r.ok){
+      STATS_ERROR = 'The /api/stats endpoint returned HTTP '+r.status+'. '+
+        (r.status===404 ? 'That usually means api/stats.js has not been added to the repository yet.' : '');
+    } else {
+      try{ STATS = JSON.parse(body); }
+      catch(e){ STATS_ERROR = 'The endpoint did not return JSON. It replied with: '+body.slice(0,120); }
+    }
+  }catch(e){ STATS_ERROR = 'The request failed: '+(e.message||e); }
   renderStats();
 }
 
@@ -682,8 +693,23 @@ function money(x){ return '$' + (x||0).toFixed(x < 1 ? 3 : 2); }
 
 function renderStats(){
   const cards = document.getElementById('statCards');
-  if(!STATS){ cards.innerHTML = '<p class="msg">Could not load the figures.</p>'; return; }
-  const p = STATS.periods;
+  const costBox = document.getElementById('costBox');
+  const sourceBox = document.getElementById('sourceBox');
+  const chart = document.getElementById('chart');
+
+  if(!STATS){
+    const m = '<p class="msg">'+esc(STATS_ERROR || 'Could not load the figures.')+'</p>';
+    cards.innerHTML = m; costBox.innerHTML = m; sourceBox.innerHTML = ''; chart.innerHTML = '';
+    return;
+  }
+  if(STATS.warning){
+    sourceBox.innerHTML = '<p class="msg">Storage note: '+esc(STATS.warning)+'</p>';
+  }
+  const p = STATS.periods || {};
+  if(!p.today){
+    const m = '<p class="msg">No figures yet. Numbers start accumulating from the first notification after this update was deployed.</p>';
+    cards.innerHTML = m; costBox.innerHTML=''; chart.innerHTML=''; return;
+  }
 
   const cardHtml = (label, v) => {
     const passRate = v.judged ? Math.round(100*v.kept/v.judged) : 0;
@@ -704,9 +730,8 @@ function renderStats(){
     cardHtml('all time', p.all);
 
   // ---- chart ----
-  const chart = document.getElementById('chart');
-  const max = Math.max(1, ...STATS.series.map(d=>d.received));
-  chart.innerHTML = STATS.series.map(d=>{
+  const max = Math.max(1, ...(STATS.series||[]).map(d=>d.received));
+  chart.innerHTML = (STATS.series||[]).map(d=>{
     const h = v => Math.round(100 * v / max);
     const tip = d.day+': '+d.received+' received, '+d.judged+' judged, '+d.kept+' passed';
     return '<div class="col" data-tip="'+esc(tip)+'">'+
@@ -741,11 +766,11 @@ function renderStats(){
 
   // ---- sources ----
   const sb = document.getElementById('sourceBox');
-  if(!STATS.sources.length){ sb.innerHTML='<p class="msg">No source data yet.</p>'; }
+  if(!(STATS.sources||[]).length){ sb.innerHTML='<p class="msg">No source data yet.</p>'; }
   else{
     sb.innerHTML = '<table class="data"><tr><th>Source</th><th class="num">Received</th>'+
       '<th class="num">Judged</th><th class="num">Passed</th><th class="num">Hit rate</th></tr>'+
-      STATS.sources.map(s=>{
+      (STATS.sources||[]).map(s=>{
         const rate = s.judged ? Math.round(100*s.kept/s.judged)+'%' : '—';
         return '<tr><td>'+esc(s.source)+'</td><td class="num">'+n(s.received)+
           '</td><td class="num">'+n(s.judged)+'</td><td class="num">'+n(s.kept)+
