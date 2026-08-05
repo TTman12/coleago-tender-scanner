@@ -253,7 +253,7 @@
       <div class="field">
         <label for="kwInput">Keyword gate <span class="msg" id="kwCount" style="font-weight:400"></span></label>
         <input type="text" id="kwInput" placeholder="Type a keyword and press Enter" autocomplete="off">
-        <p class="note">If none of these appear in a change, it is discarded before reaching the AI, at no cost. Text in a non-Latin script always goes through, and clearing the list altogether turns the gate off.</p>
+        <p class="note">Terms match at the start of a word, so a stem covers its variants: <b>consult</b> catches consultancy, consultant and consulting, and <b>spectrum</b> catches every spectrum phrase. The list covers English, French, Spanish, Portuguese, Italian and German — anything written in another language skips the gate and goes to the AI automatically. Clearing the list turns the gate off entirely.</p>
         <div class="chips collapsed" id="chips"></div>
         <button type="button" class="morelink hide" id="moreBtn" onclick="toggleChips()"></button>
         <div class="actions" style="margin-top:12px">
@@ -393,7 +393,8 @@ async function loadSettings(){
     document.getElementById('logAll').checked = s.logAll !== false;
     KEYWORDS = Array.isArray(s.keywords) ? s.keywords.slice() : [];
     renderChips();
-    if(s._warning) setMsg('saveMsg','Storage is not connected, so these are the defaults.');
+    if(s._keywordsUpdated) setMsg('saveMsg','Keyword list updated to the latest built-in version ('+KEYWORDS.length+' terms).');
+    else if(s._warning) setMsg('saveMsg','Storage is not connected, so these are the defaults.');
   }catch(e){ setMsg('saveMsg','Could not load the parameters.'); }
 }
 
