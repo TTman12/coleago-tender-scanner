@@ -68,6 +68,51 @@ async function bump(fields, source) {
 
 // Saves a record of what arrived and what we decided.
 // Stored in a hash keyed by id so it can later be starred, opened or binned.
+// A stable fingerprint of a notification, used to spot repeats.
+// Normalises whitespace, strips dates/numbers that shift between checks, and
+// lowercases, so the same notice re-appearing produces the same fingerprint.
+function fingerprint(source, text) {
+  const norm = String(text || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/\d{1,4}[\/\-.]\d{1,2}[\/\-.]\d{1,4}/g, '')  // dates
+    .replace(/\d+/g, '')                                    // any other digits
+    .replace(/[^\p{L} ]/gu, '')                              // punctuation
+    .trim()
+    .slice(0, 600);
+  const basis = String(source || '').toLowerCase() + '|' + norm;
+  // Simple, fast 53-bit hash (cyrb53). No crypto import needed.
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < basis.length; i++) {
+    const ch = basis.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+// Has this exact notice been seen before? Records the fingerprint either way.
+// Returns { seen, count, firstSeen, lastSeen }.
+async function checkSeen(fp) {
+  const key = 'coleago:seen';
+  try {
+    const raw = await redis(['HGET', key, fp]);
+    const now = new Date().toISOString();
+    if (raw) {
+      const prev = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const next = { ...prev, count: (prev.count || 1) + 1, lastSeen: now };
+      await redis(['HSET', key, fp, JSON.stringify(next)]);
+      return { seen: true, ...next };
+    }
+    await redis(['HSET', key, fp, JSON.stringify({ count: 1, firstSeen: now, lastSeen: now })]);
+    return { seen: false, count: 1, firstSeen: now, lastSeen: now };
+  } catch (e) {
+    return { seen: false, count: 1 }; // storage trouble must never block a real tender
+  }
+}
+
 async function record(entry) {
   try {
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -147,6 +192,31 @@ export default async function handler(req, res) {
     return res.status(200).json({ skipped: true, reason: 'no keyword match', source, url });
   }
 
+  // --- REPEAT CHECK: has this exact notice already been through? ---
+  // Runs before the AI, so repeats cost nothing.
+  const fp = fingerprint(source, text);
+  if (!isTest) {
+    // Explicitly binned before? Never show it again.
+    try {
+      const blocked = await redis(['HGET', 'coleago:blocked', fp]);
+      if (blocked) {
+        console.log('INGEST blocked |', source);
+        await bump({ repeats: 1 }, source);
+        return res.status(200).json({ skipped: true, reason: 'previously removed', source, url });
+      }
+    } catch (e) { /* storage trouble must not block a real tender */ }
+
+    const seen = await checkSeen(fp);
+    if (seen.seen) {
+      console.log('INGEST repeat |', source, '| seen', seen.count, 'times');
+      await bump({ repeats: 1 }, source);
+      return res.status(200).json({
+        skipped: true, reason: 'already seen', seenCount: seen.count,
+        firstSeen: seen.firstSeen, source, url,
+      });
+    }
+  }
+
   // THE JUDGE: one cheap Claude call.
   let verdict, usage = {};
   try {
@@ -215,6 +285,7 @@ score is 0-100. Never invent details not in the text.`,
       status: verdict.relevant ? 'kept' : 'dropped',
       inTokens: Number(usage.input_tokens || 0),
       outTokens: Number(usage.output_tokens || 0),
+      fp,
     });
   }
 
