@@ -720,6 +720,7 @@ function renderStats(){
       '<div class="sub">'+n(v.judged)+' judged · '+n(v.kept)+' passed'+
       (v.judged?' ('+passRate+'%)':'')+'<br>'+
       n(v.gated)+' filtered free'+(v.received?' ('+savedPct+'%)':'')+
+      (v.repeats?'<br>'+n(v.repeats)+' repeats blocked':'')+
       '<br>'+money(v.cost)+' spent</div></div>';
   };
 
@@ -758,6 +759,8 @@ function renderStats(){
     '<tr><td>Tokens used</td><td class="num">'+n(a.in_tokens)+' in · '+n(a.out_tokens)+' out</td></tr>'+
     '<tr><td>Judgements skipped by the keyword gate</td><td class="num">'+n(a.gated)+
       ' (saved about '+money(a.gated*STATS.perJudgement)+')</td></tr>'+
+    '<tr><td>Repeats blocked before the AI</td><td class="num">'+n(a.repeats)+
+      ' (saved about '+money((a.repeats||0)*STATS.perJudgement)+')</td></tr>'+
     '<tr><td>Errors</td><td class="num">'+n(a.errors)+'</td></tr>'+
     '</table>'+
     '<p class="note">Based on '+STATS.pricing.inputPerM.toFixed(2)+' per million input tokens and '+
