@@ -43,6 +43,16 @@ function hashToRecords(flat) {
   return out;
 }
 
+// When a record is binned we also blocklist its fingerprint, so the same
+// notice re-appearing on the next check does not come back.
+async function suppress(rec, on) {
+  if (!rec || !rec.fp) return;
+  try {
+    if (on) await redis(['HSET', 'coleago:blocked', rec.fp, JSON.stringify({ title: rec.title || '', at: new Date().toISOString() })]);
+    else await redis(['HDEL', 'coleago:blocked', rec.fp]);
+  } catch (e) { /* non-fatal */ }
+}
+
 function newId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
@@ -78,6 +88,10 @@ export default async function handler(req, res) {
       if (!id) return res.status(400).json({ error: 'missing id' });
 
       if (action === 'deleteForever') {
+        try {
+          const r = parse(await redis(['HGET', HASH, id]));
+          if (r) await suppress(r, true);
+        } catch (e) { /* non-fatal */ }
         await redis(['HDEL', HASH, id]);
         return res.status(200).json({ ok: true });
       }
@@ -87,8 +101,14 @@ export default async function handler(req, res) {
       if (!rec) return res.status(404).json({ error: 'not found' });
       rec.id = rec.id || id;
 
-      if (action === 'bin')      rec.deletedAt = new Date().toISOString();
-      else if (action === 'restore') delete rec.deletedAt;
+      if (action === 'bin') {
+        rec.deletedAt = new Date().toISOString();
+        await suppress(rec, true);   // stop this notice coming back
+      }
+      else if (action === 'restore') {
+        delete rec.deletedAt;
+        await suppress(rec, false);  // allow it again
+      }
       else if (action === 'star')    rec.starred = true;
       else if (action === 'unstar')  rec.starred = false;
       else if (action === 'open')    rec.opened = true;
