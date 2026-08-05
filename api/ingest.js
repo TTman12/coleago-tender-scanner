@@ -3,16 +3,31 @@
 // Self-contained on purpose: no imports, no shared files, nothing to break.
 
 const DEFAULTS = {
-  profile: `You are a procurement filter for Coleago Consulting, a telecoms management consultancy.
+  profile: `You are a procurement filter for Coleago Consulting, a specialist telecoms management consultancy.
 
-Coleago bids for: spectrum strategy, spectrum valuation and auction support, 5G and network strategy, telecoms business modelling, regulatory and policy advisory, market and demand studies, feasibility studies, due diligence, and telecoms training.
+WHAT COLEAGO DOES, in rough order of importance:
+1. Spectrum (their heartland): auctions, awards, assignment, valuation, pricing, reserve prices, spectrum strategy and policy, licence renewals and fees, caps, refarming, sharing, trading, band plans, WRC preparation, digital dividend.
+2. Auction design and bidder support: auction rules and formats (CCA, SMRA, sealed bid, clock), mock auctions, bidding strategy, bid books, war gaming, live auction support, beauty contests and comparative selection.
+3. Regulatory and policy advisory: regulatory advocacy, position papers, consultation responses, expert witness and litigation support, competition assessment, coverage obligations, universal service, interconnection and termination rates, margin squeeze, licence conditions, market reviews.
+4. Business modelling and strategy: business plans and cases, financial and cost models (including LRIC and WACC), demand forecasting, techno-economic models, benchmarking, tariff and pricing reviews.
+5. Transactions: commercial, technical and vendor due diligence, M&A and transaction support, valuation, privatisation, divestment.
+6. Fixed, fibre and broadband: national broadband plans and strategies, feasibility studies, FTTH/FTTx, fixed wireless access, open access networks, backbone and submarine cable, rural connectivity, PPP structures.
+7. Infrastructure sharing and towers: TowerCo strategy, passive and active sharing, RAN sharing (MORAN/MOCN), colocation, sale and leaseback, master lease agreements.
+8. Licensing and capacity building: licence applications, greenfield and new operator licences, spectrum management training, telecoms training and mini-MBAs, workshops, knowledge transfer.
 
-Score 70-100 if the text describes consultancy, advisory, study, valuation, modelling, strategy or training work in telecoms/spectrum.
-Score 0-30 for equipment supply, construction, cabling, vehicles, cleaning, catering, staffing, office IT, or notices with no consulting scope.
-Score 31-69 if genuinely unclear.`,
+HOW TO SCORE
+85-100: clearly within the areas above, especially anything involving spectrum, auctions, valuation, regulatory advisory or telecoms strategy work.
+70-84: consultancy, advisory, study, modelling or training work in telecoms or digital infrastructure that Coleago could credibly bid for.
+40-69: telecoms-related but the scope is unclear, very small, or only loosely advisory.
+0-30: not consulting work. Equipment or hardware supply, construction and civil works, cabling installation, vehicles, cleaning, catering, security, generic staffing, office IT, software licences, routine administrative notices, staff appointments, or press releases with no procurement in them.
+
+Judge the substance, not the wording. A notice that merely mentions telecoms while procuring furniture is not relevant. A notice seeking an adviser, consultant or expert to carry out a study, valuation, model or strategy in this sector is relevant even if it never uses the word "consultancy".`,
   threshold: 60,
-  keywords: ["tender", "tenders", "tendering", "invitation to tender", "invitation to bid", "itb", "itt", "request for proposal", "request for proposals", "rfp", "request for quotation", "rfq", "request for information", "rfi", "expression of interest", "expressions of interest", "eoi", "call for proposals", "call for tenders", "call for bids", "procurement", "procurement notice", "terms of reference", "tor", "bid", "bidding", "bidder", "solicitation", "prequalification", "pre-qualification", "shortlist", "framework agreement", "contract notice", "contract award", "award notice", "submission deadline", "closing date", "consultancy", "consultancy services", "consulting services", "consultant", "consultants", "advisory services", "technical assistance", "scope of work", "statement of work", "request for services", "competitive bidding", "procure", "spectrum", "spectrum strategy", "spectrum valuation", "spectrum pricing", "spectrum auction", "spectrum award", "spectrum assignment", "spectrum renewal", "spectrum licence", "spectrum license", "licence renewal", "license renewal", "auction design", "auction", "reserve price", "refarming", "band plan", "frequency", "frequency assignment", "frequency allocation", "radio spectrum", "5g", "4g", "lte", "imt", "mmwave", "millimetre wave", "network strategy", "network planning", "network sharing", "infrastructure sharing", "ran", "radio access network", "business modelling", "business modeling", "financial model", "financial modelling", "business plan", "business planning", "cost model", "cost modelling", "lric", "bu-lric", "cost of capital", "wacc", "tariff", "tariff review", "pricing review", "price review", "benchmarking", "benchmark study", "regulatory", "regulation", "regulatory framework", "regulatory advisory", "policy", "policy advisory", "policy review", "universal service", "universal access", "uso", "interconnection", "interconnect", "market study", "market analysis", "market review", "demand study", "demand forecast", "significant market power", "smp", "competition assessment", "feasibility study", "feasibility", "techno-economic", "due diligence", "valuation", "transaction advisory", "mergers and acquisitions", "m&a", "acquisition", "divestment", "broadband plan", "national broadband", "broadband strategy", "digital strategy", "digital transformation", "fibre", "fiber", "ftth", "fttx", "backbone", "backhaul", "tower", "towerco", "passive infrastructure", "satellite", "leo", "direct-to-device", "d2d", "mvno", "numbering", "numbering plan", "quality of service", "qos", "coverage obligation", "spectrum audit", "spectrum monitoring", "training", "capacity building", "workshop", "seminar", "masterclass", "study", "strategy", "review", "assessment", "analysis", "audit", "roadmap", "white paper", "impact assessment", "cost benefit analysis", "appel d'offres", "appel d offres", "appels d'offres", "avis d'appel d'offres", "aoo", "aoi", "manifestation d'intérêt", "avis de manifestation d'intérêt", "ami", "demande de propositions", "consultation", "conseil", "étude", "études", "marché public", "marchés publics", "cahier des charges", "termes de référence", "soumission", "adjudication", "attribution", "préqualification", "spectre", "fréquences", "enchères", "licence", "réglementation", "régulation", "formation", "expertise", "assistance technique", "faisabilité", "évaluation", "stratégie", "licitación", "licitaciones", "concurso", "concurso público", "convocatoria", "pliego", "pliego de condiciones", "términos de referencia", "expresión de interés", "manifestación de interés", "propuesta", "solicitud de propuestas", "contratación", "contratación pública", "adjudicación", "consultoría", "consultor", "asesoría", "estudio", "estudios", "espectro", "frecuencias", "subasta", "licencia", "regulación", "normativa", "formación", "capacitación", "viabilidad", "evaluación", "estrategia", "edital", "licitação", "proposta", "pedido de propostas", "manifestação de interesse", "termos de referência", "aquisição", "adjudicação", "consultoria", "assessoria", "estudo", "frequências", "leilão", "licença", "regulamentação", "formação", "capacitação", "viabilidade", "avaliação", "estratégia", "gara", "bando", "bando di gara", "appalto", "offerta", "consulenza", "studio", "spettro", "frequenze", "ausschreibung", "vergabe", "angebot", "beratung", "studie", "frequenz", "spektrum", "lizenz", "aanbesteding", "offerte", "advies", "onderzoek", "مناقصة", "مناقصات", "عطاء", "عطاءات", "دعوة", "استدراج عروض", "طلب عروض", "إعلان", "استشارة", "استشاري", "دراسة", "الطيف", "الترددات", "مزاد", "ترخيص", "تنظيم", "تدريب", "تقييم", "тендер", "закупка", "закупки", "конкурс", "запрос предложений", "заявка", "консультация", "консультант", "исследование", "спектр", "частоты", "аукцион", "лицензия", "регулирование", "обучение", "ihale", "teklif", "danışmanlık", "etüt", "frekans", "lisans", "lelang", "pengadaan", "konsultasi", "studi", "frekuensi", "izin", "zabuni", "ushauri", "utafiti"],
+  keywords: ["tender", "bid", "rfp", "rfq", "rfa", "rfi", "eoi", "ifb", "itt", "proposal", "quotation", "quote", "procure", "purchas", "solicitation", "prequalif", "pre-qualif", "shortlist", "award", "contract", "closing date", "deadline", "expression of interest", "invitation", "terms of reference", "scope of work", "statement of work", "framework agreement", "framework contract", "competitive dialogue", "notice of intended procurement", "call for", "request for", "submission", "consult", "advisor", "advisory", "expert", "specialist", "technical assistance", "tor", "spectrum", "frequenc", "radio spectrum", "mhz", "ghz", "mmwave", "millimet", "sub-1", "low-band", "mid-band", "high-band", "band", "refarm", "re-farm", "reserve price", "technology neutral", "technology-neutral", "unified licen", "licen", "imt", "wrc", "world radiocommunication", "digital dividend", "digital switchover", "uhf", "auction", "bidder", "bidding", "bid book", "bid team", "sealed bid", "sealed-bid", "clock", "combinatorial", "smra", "cca", "beauty parade", "beauty contest", "comparative selection", "comparative tender", "information memorandum", "war gaming", "mock auction", "5g", "4g", "lte", "network", "sharing", "ran", "moran", "mocn", "towerco", "tower company", "tower", "colocation", "co-location", "passive infrastructure", "site sharing", "sale and leaseback", "sale-and-leaseback", "master lease", "build-to-suit", "fibre", "fiber", "ftth", "fttx", "fttp", "fwa", "fixed wireless", "open access", "open-access", "backbone", "submarine cable", "subsea", "last mile", "middle mile", "broadband", "rural connectivity", "rural broadband", "satellite", "mvno", "roaming", "interconnect", "termination rate", "numbering", "coverage", "quality of service", "qos", "regulat", "policy", "advocacy", "lobbying", "position paper", "expert witness", "expert report", "litigation support", "competition", "margin squeeze", "universal service", "universal access", "digital divide", "connectivity gap", "tariff", "pricing", "cost model", "wacc", "benchmark", "licence condition", "licence obligation", "public consultation", "consultation response", "market review", "sector review", "valuation", "enterprise value", "due diligence", "m&a", "merger", "acquisition", "divest", "disposal", "sell-side", "privatis", "privatiz", "transaction", "business plan", "business case", "feasibility", "financial model", "model", "forecast", "demand", "market", "techno-economic", "strateg", "licensing framework", "licensing review", "review", "assessment", "analys", "audit", "roadmap", "impact", "study", "studies", "business model", "licence application", "license application", "greenfield", "new operator", "capacity building", "training", "workshop", "seminar", "mini-mba", "knowledge transfer", "itu", "gsma", "world bank", "ifc", "crasa", "cept", "dg connect", "development finance", "appel d", "offre", "soumission", "marché", "marche", "adjudication", "attribution", "manifestation", "candidature", "préqualif", "cahier des charges", "termes de référence", "termes de reference", "consultation", "consultant", "conseil", "assistance technique", "date limite", "avis", "accord-cadre", "spectre", "fréquence", "frequence", "enchère", "enchere", "licence", "bande", "prix de réserve", "prix de reserve", "attribution de fréquences", "réaménagement", "reamenagement", "réseau", "reseau", "partage", "mutualisation", "haut débit", "haut debit", "tour", "pylône", "pylone", "itinérance", "itinerance", "interconnexion", "couverture", "tarif", "évaluation", "evaluation", "valorisation", "modèle", "modele", "coût", "cout", "prévision", "prevision", "réglementation", "reglementation", "régulation", "regulation", "politique", "demande", "concurrence", "faisabilité", "faisabilite", "diligence", "stratégie", "strategie", "étude", "etude", "examen", "analyse", "plaidoyer", "formation", "renforcement", "atelier", "numérique", "numerique", "télécom", "telecom", "cession", "fusion", "privatisation", "service universel", "licitación", "licitacion", "concurso", "convocatoria", "oferta", "pliego", "propuesta", "adjudicación", "adjudicacion", "contratación", "contratacion", "precalific", "términos de referencia", "terminos de referencia", "manifestación", "manifestacion", "consultoría", "consultoria", "consultor", "asesor", "experto", "asistencia técnica", "fecha límite", "fecha limite", "aviso", "subasta", "precio de reserva", "acuerdo marco", "espectro", "frecuencia", "licencia", "banda", "red", "compartición", "comparticion", "banda ancha", "fibra", "torre", "satélite", "satelite", "itinerancia", "interconexión", "interconexion", "cobertura", "tarifa", "valoración", "valoracion", "valuación", "valuacion", "modelo", "costo", "coste", "previsión", "regulación", "regulacion", "normativa", "política", "politica", "mercado", "demanda", "competencia", "viabilidad", "diligencia", "estrategia", "estudio", "revisión", "revision", "análisis", "analisis", "auditoría", "auditoria", "formación", "formacion", "capacitación", "capacitacion", "taller", "digital", "fusión", "adquisición", "adquisicion", "privatización", "privatizacion", "servicio universal", "refarming", "edital", "licitação", "licitacao", "proposta", "adjudicação", "adjudicacao", "aquisição", "aquisicao", "pré-qualific", "pre-qualific", "termos de referência", "termos de referencia", "manifestação", "manifestacao", "assessor", "perito", "assistência técnica", "assistencia tecnica", "prazo", "leilão", "leilao", "preço de reserva", "preco de reserva", "acordo-quadro", "frequência", "frequencia", "licença", "licenca", "rede", "partilha", "banda larga", "itinerância", "interligação", "interligacao", "avaliação", "avaliacao", "custo", "previsão", "previsao", "regulamentação", "regulamentacao", "regulação", "regulacao", "procura", "concorrência", "concorrencia", "viabilidade", "diligência", "estratégia", "estudo", "revisão", "revisao", "análise", "analise", "formação", "formacao", "capacitação", "capacitacao", "oficina", "fusão", "fusao", "privatização", "privatizacao", "serviço universal", "servico universal", "gara", "bando", "appalto", "offerta", "aggiudicazione", "affidamento", "manifestazione", "prequalific", "capitolato", "termini di riferimento", "consulenza", "consulente", "esperto", "assistenza tecnica", "scadenza", "avviso", "asta", "prezzo di riserva", "accordo quadro", "spettro", "frequenz", "licenza", "rete", "condivisione", "interconnessione", "copertura", "tariffa", "valutazione", "modello", "previsione", "regolamentazione", "regolazione", "mercato", "domanda", "concorrenza", "fattibilità", "fattibilita", "diligenza", "strategia", "studio", "revisione", "analisi", "verifica", "formazione", "laboratorio", "digitale", "fusione", "acquisizione", "privatizzazione", "servizio universale", "ausschreibung", "vergabe", "angebot", "bieter", "zuschlag", "auftrag", "beschaffung", "präqualif", "praequalif", "interessenbekundung", "leistungsbeschreibung", "rahmenvertrag", "beratung", "berater", "gutachten", "sachverständ", "technische hilfe", "frist", "bekanntmachung", "auktion", "versteigerung", "mindestpreis", "spektrum", "lizenz", "netz", "gemeinsame nutzung", "mitnutzung", "breitband", "glasfaser", "turm", "mast", "satellit", "zusammenschaltung", "abdeckung", "bewertung", "modell", "kosten", "prognose", "regulierung", "politik", "markt", "nachfrage", "wettbewerb", "machbarkeit", "sorgfaltsprüfung", "studie", "überprüfung", "ueberpruefung", "prüfung", "schulung", "weiterbildung", "telekom", "übernahme", "privatisierung", "universaldienst", "aanbesteding", "inschrijving", "advies", "onderzoek", "ihale", "teklif", "danışmanlık", "danismanlik", "etüt", "przetarg", "doradztwo", "widmo", "upphandling", "anbud", "udbud", "hankinta", "tilbud", "lelang", "pengadaan", "konsultasi", "penawaran", "zabuni", "ushauri", "utafiti", "đấu thầu", "dau thau", "tư vấn", "licitácia", "veřejná zakázka", "javna nabava", "nabavka", "ajánlat", "közbeszerzés", "licitatie", "achizi"],
   logAll: true, // VERIFICATION MODE: record every notification, not just the keepers
+  // Bump this whenever the built-in keyword list changes. Saved settings with an
+  // older stamp automatically pick up the new list, so the default really is the default.
+  keywordsVersion: 3,
 };
 
 async function redis(command) {
@@ -123,6 +138,51 @@ async function record(entry) {
   }
 }
 
+// Escapes a term for use in a regular expression.
+function esc(t) { return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+// Matches a term at the START of a word, so stems expand naturally
+// ("consult" catches consultancy/consultant/consulting) while short terms
+// no longer match inside unrelated words ("tor" will not match "regulator").
+function matchesTerm(hay, term) {
+  const t = String(term || '').toLowerCase().trim();
+  if (!t) return false;
+  try {
+    return new RegExp('(^|[^\\p{L}])' + esc(t), 'u').test(hay);
+  } catch (e) {
+    return hay.includes(t); // very old runtimes
+  }
+}
+
+// Very small language check: are enough common function words present from the
+// six languages the keyword list covers? If not, we assume it is some other
+// language and send it to the AI instead of discarding it.
+const COVERED_STOPWORDS = [
+  // English
+  'the','and','for','with','shall','will','been','this','that','from',
+  // French
+  'les','des','une','pour','dans','avec','est','sont','sur','par','cette',
+  // Spanish
+  'los','las','una','para','con','por','del','que','como','este',
+  // Portuguese
+  'uma','para','com','dos','das','pelo','pela','este','nao',
+  // Italian
+  'gli','delle','della','per','con','sono','questo','alla','nel',
+  // German
+  'der','die','das','und','fur','von','mit','ist','sind','eine','den','auf',
+];
+
+function looksLikeCoveredLanguage(hay) {
+  let hits = 0;
+  for (const w of COVERED_STOPWORDS) {
+    if (new RegExp('(^|[^\\p{L}])' + w + '([^\\p{L}]|$)', 'u').test(hay)) {
+      hits++;
+      if (hits >= 2) return true;
+    }
+  }
+  return false;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST' });
 
@@ -152,7 +212,14 @@ export default async function handler(req, res) {
   let settings = DEFAULTS;
   try {
     const saved = await redis(['GET', 'coleago:settings']);
-    if (saved) settings = { ...DEFAULTS, ...JSON.parse(saved) };
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      settings = { ...DEFAULTS, ...parsed };
+      // An older saved keyword list is superseded by the built-in one.
+      if (Number(parsed.keywordsVersion || 0) < Number(DEFAULTS.keywordsVersion || 0)) {
+        settings.keywords = DEFAULTS.keywords;
+      }
+    }
   } catch (e) {
     // No Redis yet? Carry on with the defaults so the judge still works.
   }
@@ -183,8 +250,21 @@ export default async function handler(req, res) {
   //   3. a keyword actually appears
   const hay = text.toLowerCase();
   const list = settings.keywords || [];
+
+  // (a) Scripts that Latin keywords could never match: always let the AI read it.
   const nonLatin = /[\u0600-\u06FF\u0400-\u04FF\u0370-\u03FF\u0590-\u05FF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF\u0E00-\u0E7F\u0900-\u097F\u1200-\u137F]/.test(text);
-  const matched = list.length === 0 || nonLatin || list.some((k) => hay.includes(String(k).toLowerCase()));
+
+  // (b) Latin script, but not one of the six languages the keyword list covers
+  //     (English, French, Spanish, Portuguese, Italian, German) -> also let the
+  //     AI read it, rather than discarding a language we have no keywords for.
+  const known = !nonLatin && looksLikeCoveredLanguage(hay);
+
+  // (c) Otherwise require an actual keyword, matched at the start of a word so
+  //     that stems work ("consult" -> consultancy) without false hits
+  //     ("tor" must not match "regulator").
+  const hasKeyword = list.some((k) => matchesTerm(hay, k));
+
+  const matched = list.length === 0 || nonLatin || !known || hasKeyword;
   if (!matched) {
     console.log('INGEST no-keyword |', source, url);
     if (!isTest) await bump({ gated: 1 });
