@@ -1,113 +1,846 @@
-// Reads and saves the judging parameters shown on the dashboard.
-// Self-contained on purpose: no imports.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tender Scanner · Coleago</title>
+<style>
+  :root{
+    /* ---- BRAND: change these two lines to match Coleago exactly ---- */
+    --brand:        #0E4C8A;   /* sidebar blue */
+    --brand-deep:   #0A3866;   /* darker blue for hover / active */
+    /* --------------------------------------------------------------- */
+    --ink:      #1B2430;
+    --ink-soft: #5A6675;
+    --line:     #E2E7EC;
+    --surface:  #F7F9FB;
+    --kept:     #1A7F45;
+    --dropped:  #7A8794;
+    --empty:    #A66B00;
+    --error:    #B3261E;
+    --rail: 250px;
+    --font: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:#fff; color:var(--ink);
+    font-family:var(--font); font-size:15px; line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
 
-const DEFAULTS = {
-  profile: `You are a procurement and market-intelligence filter for Coleago Consulting, a specialist telecoms management consultancy.
+  /* ---------- left rail: fixed, always full height ---------- */
+  .rail{
+    position:fixed; top:0; left:0; bottom:0;
+    width:var(--rail);
+    background:var(--brand); color:#fff;
+    display:flex; flex-direction:column;
+    padding:26px 0 20px; overflow-y:auto; z-index:10;
+  }
+  .logo{padding:0 24px 30px}
+  .logo svg{width:158px; height:auto; display:block}
+  .rail nav{display:flex; flex-direction:column}
+  .rail nav button{
+    all:unset; cursor:pointer;
+    padding:11px 24px; font-size:14.5px; font-weight:500;
+    color:rgba(255,255,255,.78);
+    border-left:3px solid transparent;
+    transition:background .15s, color .15s;
+  }
+  .rail nav button:hover{background:var(--brand-deep); color:#fff}
+  .rail nav button.on{background:var(--brand-deep); color:#fff; border-left-color:#fff; font-weight:600}
+  .rail nav button:focus-visible{outline:2px solid #fff; outline-offset:-2px}
+  .rail .foot{
+    margin-top:auto; padding:0 24px;
+    font-size:11.5px; letter-spacing:.03em;
+    color:rgba(255,255,255,.5); text-transform:uppercase;
+  }
 
-WHAT COLEAGO DOES, in rough order of importance:
-1. Spectrum (their heartland): auctions, awards, assignment, valuation, pricing, reserve prices, spectrum strategy and policy, licence renewals and fees, caps, refarming, sharing, trading, band plans, WRC preparation, digital dividend.
-2. Auction design and bidder support: auction rules and formats (CCA, SMRA, sealed bid, clock), mock auctions, bidding strategy, bid books, war gaming, live auction support, beauty contests and comparative selection.
-3. Regulatory and policy advisory: regulatory advocacy, position papers, consultation responses, expert witness and litigation support, competition assessment, coverage obligations, universal service, interconnection and termination rates, margin squeeze, licence conditions, market reviews.
-4. Business modelling and strategy: business plans and cases, financial and cost models (including LRIC and WACC), demand forecasting, techno-economic models, benchmarking, tariff and pricing reviews.
-5. Transactions: commercial, technical and vendor due diligence, M&A and transaction support, valuation, privatisation, divestment.
-6. Fixed, fibre and broadband: national broadband plans and strategies, feasibility studies, FTTH/FTTx, fixed wireless access, open access networks, backbone and submarine cable, rural connectivity, PPP structures.
-7. Infrastructure sharing and towers: TowerCo strategy, passive and active sharing, RAN sharing (MORAN/MOCN), colocation, sale and leaseback, master lease agreements.
-8. Licensing and capacity building: licence applications, greenfield and new operator licences, spectrum management training, telecoms training and mini-MBAs, workshops, knowledge transfer.
+  /* ---------- main ---------- */
+  main{margin-left:var(--rail); padding:38px 44px 70px; max-width:1020px}
+  h1{font-size:23px; font-weight:600; margin:0 0 4px; letter-spacing:-.01em}
+  h2{font-size:16px; font-weight:600; margin:0 0 4px}
+  .lede{color:var(--ink-soft); font-size:13.5px; margin:0 0 26px}
+  .note{color:var(--ink-soft); font-size:12.5px; margin:6px 0 0}
 
-THREE CATEGORIES. Every relevant notice must be classified as exactly one:
+  .panel{border:1px solid var(--line); border-radius:10px; padding:22px 24px; margin-bottom:22px; background:#fff}
 
-A. TENDER — an actual procurement Coleago can bid for right now: an RFP, ITT, EOI, RFQ, call for proposals, prequalification, or any invitation to supply consultancy, advisory, study, modelling or training services. This is the most important category. Set "type" to "tender".
+  label{display:block; font-weight:600; font-size:13.5px; margin:0 0 7px}
+  .field{margin-bottom:20px}
+  .field:last-child{margin-bottom:0}
+  textarea,input[type=text],input[type=password]{
+    width:100%; font:inherit; color:var(--ink);
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:7px; padding:10px 12px;
+  }
+  textarea{resize:vertical; line-height:1.5}
+  textarea:focus,input:focus{outline:2px solid var(--brand); outline-offset:-1px; background:#fff}
+  input[type=range]{width:100%; accent-color:var(--brand)}
+  .check{display:flex; align-items:flex-start; gap:10px; font-weight:500; font-size:14px}
+  .check input{width:auto; margin-top:3px; accent-color:var(--brand)}
 
-B. LEAD — something is HAPPENING NOW that Coleago can act on immediately by approaching a regulator or operator. A spectrum auction is under way or has just been announced, a licence is being renewed, a market review has opened, an operator is being privatised or merged, a band is being released, a national plan has just been launched, or a public consultation has opened on a subject within Coleago's work. Not a procurement, but a live reason to make contact today. Set "type" to "lead".
+  .actions{display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:20px}
+  button.primary{
+    background:var(--brand); color:#fff; border:0; border-radius:7px;
+    padding:10px 20px; font:inherit; font-weight:600; cursor:pointer;
+    transition:background .15s;
+  }
+  button.primary:hover{background:var(--brand-deep)}
+  button.primary:disabled{opacity:.55; cursor:default}
+  button.ghost{
+    background:#fff; color:var(--brand); border:1px solid var(--line);
+    border-radius:7px; padding:9px 16px; font:inherit; font-weight:600; cursor:pointer;
+  }
+  button.ghost:hover{border-color:var(--brand)}
+  .msg{color:var(--ink-soft); font-size:13px}
 
-C. INTELLIGENCE — highly relevant, but it concerns something that will happen in the FUTURE rather than now. A regulator states it intends to auction spectrum next year, plans a licensing framework, signals a future band release, or sets out a roadmap or strategy for coming years. Worth knowing and worth tracking, but there is nothing to act on this week. Set "type" to "intelligence".
+  /* ---------- verdict + records ---------- */
+  .verdict{border:1px solid var(--line); border-left:4px solid var(--dropped); border-radius:8px; padding:14px 16px; margin-top:16px; background:var(--surface)}
+  .verdict.keep{border-left-color:var(--kept)}
+  .verdict .head{font-weight:700; margin-bottom:5px}
 
-The difference between LEAD and INTELLIGENCE is timing. If it is live, open, under way or just announced, it is a LEAD. If it is planned, intended, proposed or scheduled for a later period, it is INTELLIGENCE.
+  .rec{border:1px solid var(--line); border-left:4px solid var(--dropped); border-radius:8px; padding:14px 16px; margin-bottom:12px}
+  .rec .top{display:flex; justify-content:space-between; align-items:baseline; gap:12px}
+  .rec .title{font-weight:600}
+  .rec .score{background:var(--brand); color:#fff; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:700; flex:none}
+  .rec .meta{color:var(--ink-soft); font-size:12.5px; margin-top:2px}
+  .rec .why{margin-top:7px; font-size:14px}
+  .rec .raw{margin-top:9px; padding:9px 11px; background:var(--surface); border-radius:6px;
+            font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11.5px; color:var(--ink-soft);
+            white-space:pre-wrap; word-break:break-word; max-height:130px; overflow:auto}
+  .rec a{color:var(--brand); font-size:13px; display:inline-block; margin-top:8px}
+  .tag{font-weight:700; text-transform:uppercase; letter-spacing:.04em; font-size:11px}
 
-PUBLIC CONSULTATIONS. Coleago does NOT respond to public consultations, so they are never tenders. Treat a consultation purely as a signal, and classify it as a LEAD (if it is open now) or INTELLIGENCE (if it concerns something later). Judge it ONLY on whether the SUBJECT MATTER falls within Coleago's work. A consultation on spectrum awards, licence fees, market reviews or interconnection is valuable. A consultation on unrelated matters — consumer complaints handling, postal services, broadcasting content, staff regulations, cybersecurity rules, data protection, general administrative procedure — is NOT relevant and must be scored 0-20, however officially it is worded.
+  .empty-state{border:1px dashed var(--line); border-radius:10px; padding:34px; text-align:center; color:var(--ink-soft)}
+  .hide{display:none}
 
-DATES — CHECK THESE CAREFULLY. Today's date is given in the message.
-- If the notice states a submission deadline, closing date, bid date or similar and that date has ALREADY PASSED, it is dead. Score it 0-10, set "expired" to true, and say so in the rationale.
-- If the notice was clearly published or dated more than ONE YEAR before today, it is stale. Score it 0-10, set "expired" to true.
-- If no date is given, do not assume it is expired. Set "expired" to false and judge it normally.
-- Never treat a FUTURE date as expired.
+  .rail nav button .badge{
+    background:rgba(255,255,255,.22); color:#fff; border-radius:999px;
+    padding:1px 7px; font-size:11px; font-weight:700; margin-left:7px;
+  }
 
-HOW TO SCORE (after the date check)
-85-100: squarely within Coleago's areas — a tender for spectrum, auction, valuation, regulatory or telecoms strategy work, or a strong lead such as a spectrum auction now under way.
-70-84: consultancy, advisory, study, modelling or training work in telecoms or digital infrastructure Coleago could credibly bid for, or a lead or intelligence item whose subject matter is clearly within their areas.
-40-69: telecoms-related but the scope is unclear, small, or only loosely advisory.
-0-30: not relevant. Equipment or hardware supply, construction and civil works, cabling, vehicles, cleaning, catering, security, generic staffing, office IT, software licences, routine administrative notices, staff appointments, or a consultation on subject matter outside Coleago's work.
+  /* ---------- keyword chips ---------- */
+  .chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; position:relative}
+  .chips.collapsed{max-height:104px; overflow:hidden}
+  .chips.collapsed::after{
+    content:''; position:absolute; left:0; right:0; bottom:0; height:34px;
+    background:linear-gradient(to bottom, rgba(255,255,255,0), #fff);
+    pointer-events:none;
+  }
+  .morelink{
+    all:unset; cursor:pointer; color:var(--brand); font-size:13px; font-weight:600;
+    margin-top:10px; display:inline-block;
+  }
+  .morelink:hover{text-decoration:underline}
+  .morelink:focus-visible{outline:2px solid var(--brand); outline-offset:2px}
+  .chip{
+    display:inline-flex; align-items:center; gap:7px;
+    background:var(--surface); border:1px solid var(--line); border-radius:999px;
+    padding:4px 6px 4px 12px; font-size:13px;
+  }
+  .chip button{
+    all:unset; cursor:pointer; width:17px; height:17px; border-radius:50%;
+    display:grid; place-items:center; font-size:13px; line-height:1;
+    color:var(--ink-soft); background:#fff; border:1px solid var(--line);
+  }
+  .chip button:hover{background:var(--error); border-color:var(--error); color:#fff}
+  .chip button:focus-visible{outline:2px solid var(--brand); outline-offset:1px}
 
-Judge the substance, not the wording. A notice that merely mentions telecoms while procuring furniture is not relevant. A notice seeking an adviser, consultant or expert to carry out a study, valuation, model or strategy in this sector is relevant even if it never uses the word "consultancy".`,
-  threshold: 60,
-  keywords: ["tender", "bid", "rfp", "rfq", "rfa", "rfi", "eoi", "ifb", "itt", "proposal", "quotation", "quote", "procure", "purchas", "solicitation", "prequalif", "pre-qualif", "shortlist", "award", "contract", "closing date", "deadline", "expression of interest", "invitation", "terms of reference", "scope of work", "statement of work", "framework agreement", "framework contract", "competitive dialogue", "notice of intended procurement", "call for", "request for", "submission", "consult", "advisor", "advisory", "expert", "specialist", "technical assistance", "tor", "spectrum", "frequenc", "radio spectrum", "mhz", "ghz", "mmwave", "millimet", "sub-1", "low-band", "mid-band", "high-band", "band", "refarm", "re-farm", "reserve price", "technology neutral", "technology-neutral", "unified licen", "licen", "imt", "wrc", "world radiocommunication", "digital dividend", "digital switchover", "uhf", "auction", "bidder", "bidding", "bid book", "bid team", "sealed bid", "sealed-bid", "clock", "combinatorial", "smra", "cca", "beauty parade", "beauty contest", "comparative selection", "comparative tender", "information memorandum", "war gaming", "mock auction", "5g", "4g", "lte", "network", "sharing", "ran", "moran", "mocn", "towerco", "tower company", "tower", "colocation", "co-location", "passive infrastructure", "site sharing", "sale and leaseback", "sale-and-leaseback", "master lease", "build-to-suit", "fibre", "fiber", "ftth", "fttx", "fttp", "fwa", "fixed wireless", "open access", "open-access", "backbone", "submarine cable", "subsea", "last mile", "middle mile", "broadband", "rural connectivity", "rural broadband", "satellite", "mvno", "roaming", "interconnect", "termination rate", "numbering", "coverage", "quality of service", "qos", "regulat", "policy", "advocacy", "lobbying", "position paper", "expert witness", "expert report", "litigation support", "competition", "margin squeeze", "universal service", "universal access", "digital divide", "connectivity gap", "tariff", "pricing", "cost model", "wacc", "benchmark", "licence condition", "licence obligation", "public consultation", "consultation response", "market review", "sector review", "valuation", "enterprise value", "due diligence", "m&a", "merger", "acquisition", "divest", "disposal", "sell-side", "privatis", "privatiz", "transaction", "business plan", "business case", "feasibility", "financial model", "model", "forecast", "demand", "market", "techno-economic", "strateg", "licensing framework", "licensing review", "review", "assessment", "analys", "audit", "roadmap", "impact", "study", "studies", "business model", "licence application", "license application", "greenfield", "new operator", "capacity building", "training", "workshop", "seminar", "mini-mba", "knowledge transfer", "itu", "gsma", "world bank", "ifc", "crasa", "cept", "dg connect", "development finance", "appel d", "offre", "soumission", "marché", "marche", "adjudication", "attribution", "manifestation", "candidature", "préqualif", "cahier des charges", "termes de référence", "termes de reference", "consultation", "consultant", "conseil", "assistance technique", "date limite", "avis", "accord-cadre", "spectre", "fréquence", "frequence", "enchère", "enchere", "licence", "bande", "prix de réserve", "prix de reserve", "attribution de fréquences", "réaménagement", "reamenagement", "réseau", "reseau", "partage", "mutualisation", "haut débit", "haut debit", "tour", "pylône", "pylone", "itinérance", "itinerance", "interconnexion", "couverture", "tarif", "évaluation", "evaluation", "valorisation", "modèle", "modele", "coût", "cout", "prévision", "prevision", "réglementation", "reglementation", "régulation", "regulation", "politique", "demande", "concurrence", "faisabilité", "faisabilite", "diligence", "stratégie", "strategie", "étude", "etude", "examen", "analyse", "plaidoyer", "formation", "renforcement", "atelier", "numérique", "numerique", "télécom", "telecom", "cession", "fusion", "privatisation", "service universel", "licitación", "licitacion", "concurso", "convocatoria", "oferta", "pliego", "propuesta", "adjudicación", "adjudicacion", "contratación", "contratacion", "precalific", "términos de referencia", "terminos de referencia", "manifestación", "manifestacion", "consultoría", "consultoria", "consultor", "asesor", "experto", "asistencia técnica", "fecha límite", "fecha limite", "aviso", "subasta", "precio de reserva", "acuerdo marco", "espectro", "frecuencia", "licencia", "banda", "red", "compartición", "comparticion", "banda ancha", "fibra", "torre", "satélite", "satelite", "itinerancia", "interconexión", "interconexion", "cobertura", "tarifa", "valoración", "valoracion", "valuación", "valuacion", "modelo", "costo", "coste", "previsión", "regulación", "regulacion", "normativa", "política", "politica", "mercado", "demanda", "competencia", "viabilidad", "diligencia", "estrategia", "estudio", "revisión", "revision", "análisis", "analisis", "auditoría", "auditoria", "formación", "formacion", "capacitación", "capacitacion", "taller", "digital", "fusión", "adquisición", "adquisicion", "privatización", "privatizacion", "servicio universal", "refarming", "edital", "licitação", "licitacao", "proposta", "adjudicação", "adjudicacao", "aquisição", "aquisicao", "pré-qualific", "pre-qualific", "termos de referência", "termos de referencia", "manifestação", "manifestacao", "assessor", "perito", "assistência técnica", "assistencia tecnica", "prazo", "leilão", "leilao", "preço de reserva", "preco de reserva", "acordo-quadro", "frequência", "frequencia", "licença", "licenca", "rede", "partilha", "banda larga", "itinerância", "interligação", "interligacao", "avaliação", "avaliacao", "custo", "previsão", "previsao", "regulamentação", "regulamentacao", "regulação", "regulacao", "procura", "concorrência", "concorrencia", "viabilidade", "diligência", "estratégia", "estudo", "revisão", "revisao", "análise", "analise", "formação", "formacao", "capacitação", "capacitacao", "oficina", "fusão", "fusao", "privatização", "privatizacao", "serviço universal", "servico universal", "gara", "bando", "appalto", "offerta", "aggiudicazione", "affidamento", "manifestazione", "prequalific", "capitolato", "termini di riferimento", "consulenza", "consulente", "esperto", "assistenza tecnica", "scadenza", "avviso", "asta", "prezzo di riserva", "accordo quadro", "spettro", "frequenz", "licenza", "rete", "condivisione", "interconnessione", "copertura", "tariffa", "valutazione", "modello", "previsione", "regolamentazione", "regolazione", "mercato", "domanda", "concorrenza", "fattibilità", "fattibilita", "diligenza", "strategia", "studio", "revisione", "analisi", "verifica", "formazione", "laboratorio", "digitale", "fusione", "acquisizione", "privatizzazione", "servizio universale", "ausschreibung", "vergabe", "angebot", "bieter", "zuschlag", "auftrag", "beschaffung", "präqualif", "praequalif", "interessenbekundung", "leistungsbeschreibung", "rahmenvertrag", "beratung", "berater", "gutachten", "sachverständ", "technische hilfe", "frist", "bekanntmachung", "auktion", "versteigerung", "mindestpreis", "spektrum", "lizenz", "netz", "gemeinsame nutzung", "mitnutzung", "breitband", "glasfaser", "turm", "mast", "satellit", "zusammenschaltung", "abdeckung", "bewertung", "modell", "kosten", "prognose", "regulierung", "politik", "markt", "nachfrage", "wettbewerb", "machbarkeit", "sorgfaltsprüfung", "studie", "überprüfung", "ueberpruefung", "prüfung", "schulung", "weiterbildung", "telekom", "übernahme", "privatisierung", "universaldienst", "aanbesteding", "inschrijving", "advies", "onderzoek", "ihale", "teklif", "danışmanlık", "danismanlik", "etüt", "przetarg", "doradztwo", "widmo", "upphandling", "anbud", "udbud", "hankinta", "tilbud", "lelang", "pengadaan", "konsultasi", "penawaran", "zabuni", "ushauri", "utafiti", "đấu thầu", "dau thau", "tư vấn", "licitácia", "veřejná zakázka", "javna nabava", "nabavka", "ajánlat", "közbeszerzés", "licitatie", "achizi"],
-  logAll: true, // VERIFICATION MODE: record every notification, not just the keepers
-  // Bump this whenever the built-in keyword list changes. Saved settings with an
-  // older stamp automatically pick up the new list, so the default really is the default.
-  keywordsVersion: 4,
+  /* ---------- record actions ---------- */
+  .rec.unread{background:#F4F8FC; border-color:#CBDDEE}
+  .rec.unread .title{font-weight:700}
+  .dot{width:8px; height:8px; border-radius:50%; background:var(--brand); flex:none}
+  .rec .acts{display:flex; gap:8px; align-items:center; margin-top:10px; flex-wrap:wrap}
+  .iconbtn{
+    all:unset; cursor:pointer; font-size:12.5px; font-weight:600;
+    padding:5px 11px; border-radius:6px; border:1px solid var(--line); color:var(--ink-soft);
+  }
+  .iconbtn:hover{border-color:var(--brand); color:var(--brand)}
+  .iconbtn:focus-visible{outline:2px solid var(--brand); outline-offset:1px}
+  .iconbtn.starred{color:#B8860B; border-color:#E8D9A8; background:#FDF9EC}
+  .iconbtn.danger:hover{border-color:var(--error); color:var(--error)}
+  .statgrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px}
+  .statcard{border:1px solid var(--line); border-radius:9px; padding:14px 16px}
+  .statcard .n{font-size:24px; font-weight:700; letter-spacing:-.02em}
+  .statcard .l{font-size:12px; color:var(--ink-soft); margin-top:2px}
+  .statcard .sub{font-size:11.5px; color:var(--ink-soft); margin-top:6px}
+
+  .chart{display:flex; align-items:flex-end; gap:3px; height:120px; margin-top:12px}
+  .chart .col{flex:1; display:flex; flex-direction:column-reverse; gap:1px; min-width:0; position:relative}
+  .chart .seg{width:100%; border-radius:1px}
+  .chart .col:hover::after{
+    content:attr(data-tip); position:absolute; bottom:100%; left:50%; transform:translateX(-50%);
+    background:var(--ink); color:#fff; font-size:11px; padding:5px 8px; border-radius:5px;
+    white-space:nowrap; z-index:5; margin-bottom:5px;
+  }
+  .chartkey{display:flex; gap:14px; margin-top:10px; font-size:12px; color:var(--ink-soft)}
+  .chartkey span{display:flex; align-items:center; gap:5px}
+  .swatch{width:10px; height:10px; border-radius:2px; display:inline-block}
+
+  table.data{width:100%; border-collapse:collapse; font-size:13.5px; margin-top:10px}
+  table.data th{text-align:left; font-size:12px; color:var(--ink-soft); font-weight:600; padding:6px 8px; border-bottom:1px solid var(--line)}
+  table.data td{padding:7px 8px; border-bottom:1px solid var(--line)}
+  table.data td.num{text-align:right; font-variant-numeric:tabular-nums}
+  table.data tr:last-child td{border-bottom:0}
+
+  .subtabs{display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 10px}
+  .subtab{
+    all:unset; cursor:pointer; padding:7px 14px; border-radius:7px;
+    border:1px solid var(--line); font-size:13.5px; font-weight:600; color:var(--ink-soft);
+  }
+  .subtab:hover{border-color:var(--brand); color:var(--brand)}
+  .subtab.on{background:var(--brand); border-color:var(--brand); color:#fff}
+  .subtab span{opacity:.75; font-weight:500}
+
+  .typetag{border-radius:4px; padding:1px 7px; font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.03em}
+  .typetag.tender{background:#E7F3EA; color:#1A7F45}
+  .typetag.lead{background:#FFF3E0; color:#A66B00}
+  .typetag.intelligence{background:#EFEAF7; color:#5B3E96}
+  .typetag.unknown{background:#EEF1F4; color:#5A6675}
+  .typedesc{font-size:12px; color:var(--ink-soft); margin-left:9px}
+  .langtag{background:#EEF3F9; color:var(--brand); border-radius:4px; padding:1px 6px; font-weight:600; font-size:11.5px}
+  .binmeta{font-size:12px; color:var(--empty); font-weight:600; margin-top:8px}
+
+  @media (max-width:760px){
+    .rail{position:static; width:100%; flex-direction:row; align-items:center; padding:12px 16px; gap:8px; flex-wrap:wrap; bottom:auto}
+    .logo{padding:0 14px 0 0}
+    .logo svg{width:112px}
+    .rail nav{flex-direction:row}
+    .rail nav button{padding:8px 14px; border-left:0; border-bottom:3px solid transparent}
+    .rail nav button.on{border-left:0; border-bottom-color:#fff}
+    .rail .foot{display:none}
+    main{margin-left:0; padding:24px 18px 60px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<aside class="rail">
+  <div class="logo">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 241 49" fill="none" role="img" aria-label="Coleago">
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M67.0083 0.198491C32.643 -0.878291 0 8.53743 0 22.1746C0 36.7081 40.1805 45.3897 67.0083 43.6338C44.821 43.1688 11.2573 35.5273 11.2297 22.1746C11.2022 8.68121 42.126 0.83783 67.0083 0.198491Z" fill="white"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M67.0079 6.42928C43.5328 5.66452 21.2294 12.3302 21.2324 21.9845C21.2324 32.2751 48.6812 38.4085 67.0079 37.1757C51.8503 36.8484 28.9228 31.4369 28.9045 21.9845C28.8861 12.4311 50.0119 6.87896 67.0079 6.42928Z" fill="white"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M67.0087 12.5965C52.3468 12.1346 38.4189 16.1725 38.4189 22.0214C38.4189 28.2557 55.5496 31.9694 67.0087 31.226C57.5441 31.0241 43.2216 27.7479 43.2125 22.0214C43.2125 16.2337 56.3939 12.8718 67.0087 12.5965Z" fill="white"/>
+      <path d="M88.4462 38.892H91.9213C91.9213 38.9593 91.9213 39.0449 91.9213 39.149C91.9213 39.253 91.9213 39.3325 91.9213 39.3845C91.9213 41.0027 91.542 42.2049 90.7925 43.0033C90.043 43.8017 88.902 44.2025 87.3725 44.2025C85.6472 44.2025 84.4328 43.712 83.7292 42.7311C83.0256 41.7502 82.6738 40.0228 82.6738 37.5491C82.6738 35.0713 83.0277 33.3378 83.7353 32.3487C84.443 31.3596 85.6554 30.8681 87.3725 30.8743C88.9163 30.8743 90.0532 31.2699 90.7833 32.0612C91.5083 32.8504 91.8754 34.0832 91.8754 35.7565V35.9767H88.4921V35.6158C88.528 35.0658 88.4435 34.5145 88.2443 34.0006C88.1708 33.8475 88.0531 33.72 87.9065 33.6344C87.7598 33.5488 87.5909 33.5091 87.4215 33.5203C87.2202 33.5099 87.0213 33.568 86.8574 33.6853C86.6935 33.8025 86.5742 33.9719 86.519 34.1658C86.364 34.594 86.2855 35.7157 86.2835 37.5307C86.2835 39.2805 86.363 40.3909 86.519 40.8681C86.5595 41.0708 86.6693 41.2531 86.8295 41.3837C86.9896 41.5143 87.1903 41.5851 87.397 41.5839C87.5679 41.5906 87.7368 41.5457 87.8819 41.4552C88.027 41.3646 88.1415 41.2326 88.2107 41.0761C88.4132 40.563 88.501 40.0117 88.4676 39.461C88.4676 39.4059 88.4676 39.308 88.4676 39.1795C88.4676 39.0511 88.4676 38.9471 88.4676 38.8736L88.4462 38.892ZM97.3419 37.5491C97.3419 39.3233 97.4184 40.4399 97.5744 40.8865C97.6273 41.0779 97.7409 41.247 97.8981 41.3684C98.0553 41.4898 98.2476 41.5569 98.4462 41.5597C98.6448 41.5625 98.839 41.5007 98.9995 41.3837C99.16 41.2668 99.2782 41.1009 99.3364 40.911C99.4924 40.4827 99.572 39.36 99.572 37.546C99.572 35.732 99.4924 34.6063 99.3364 34.1811C99.2851 33.9889 99.1699 33.82 99.0098 33.7021C98.8496 33.5842 98.6541 33.5244 98.4554 33.5326C98.2531 33.5283 98.0555 33.5934 97.8952 33.7169C97.735 33.8404 97.6218 34.015 97.5744 34.2117C97.4184 34.6613 97.3419 35.7718 97.3419 37.5521V37.5491ZM93.7567 37.5491C93.7567 35.0855 94.1095 33.3592 94.8152 32.3701C95.5208 31.381 96.7342 30.8855 98.4554 30.8834C100.175 30.8834 101.388 31.3749 102.096 32.3579C102.803 33.3409 103.156 35.0743 103.154 37.5583C103.154 40.0177 102.801 41.742 102.096 42.7311C101.39 43.7202 100.177 44.2137 98.4554 44.2117C96.7301 44.2117 95.5126 43.7222 94.8121 42.7403C94.1116 41.7583 93.7567 40.033 93.7567 37.5583V37.5491ZM108.718 43.8599H105.213V27.0352H108.718V43.8599ZM116.764 39.4243H120.071V39.7302C120.071 41.2067 119.685 42.3191 118.914 43.0676C118.143 43.816 116.992 44.1892 115.461 44.1872C114.748 44.1966 114.04 44.0848 113.365 43.8568C112.807 43.6803 112.302 43.3645 111.9 42.9391C111.474 42.4289 111.184 41.8198 111.056 41.1679C110.856 40.0034 110.773 38.8218 110.808 37.6408C110.808 35.8584 110.893 34.6124 111.065 33.9027C111.206 33.2561 111.509 32.656 111.946 32.159C112.366 31.7111 112.892 31.3765 113.475 31.1863C114.165 30.9545 114.889 30.8427 115.617 30.8559C116.346 30.8413 117.072 30.9616 117.758 31.2107C118.295 31.4098 118.774 31.7394 119.151 32.1699C119.529 32.6003 119.793 33.1181 119.921 33.6763C120.091 34.598 120.161 35.5355 120.129 36.4723V38.0018H114.39C114.386 38.0497 114.386 38.0977 114.39 38.1456C114.359 38.6779 114.344 39.048 114.344 39.2591C114.344 40.1462 114.442 40.7641 114.629 41.1098C114.724 41.2804 114.866 41.4199 115.039 41.5116C115.211 41.6033 115.407 41.6433 115.601 41.6268C115.775 41.6407 115.95 41.6118 116.11 41.5424C116.27 41.4731 116.41 41.3655 116.519 41.2291C116.749 40.8712 116.856 40.4481 116.825 40.0238C116.825 39.9168 116.825 39.7485 116.794 39.5222C116.792 39.4855 116.792 39.4487 116.794 39.412L116.764 39.4243ZM114.476 35.8299H116.856V35.7626C116.883 35.4567 116.898 35.2181 116.898 35.0865C116.93 34.6108 116.824 34.136 116.592 33.7192C116.488 33.5712 116.348 33.4527 116.184 33.375C116.021 33.2973 115.84 33.2631 115.659 33.2756C115.482 33.2623 115.305 33.2951 115.144 33.3706C114.983 33.4462 114.845 33.562 114.742 33.7069C114.523 34.1485 114.428 34.6411 114.466 35.1324C114.466 35.3129 114.466 35.4383 114.466 35.5576C114.466 35.6769 114.466 35.7504 114.482 35.8299H114.476ZM127.935 37.7724C127.208 37.9381 126.527 38.263 125.941 38.7237C125.738 38.9002 125.577 39.1191 125.468 39.3649C125.359 39.6107 125.305 39.8774 125.311 40.1462C125.292 40.4921 125.401 40.8329 125.617 41.1037C125.719 41.2234 125.848 41.3181 125.992 41.3806C126.137 41.4432 126.294 41.4719 126.452 41.4646C126.669 41.4835 126.888 41.4448 127.085 41.3525C127.283 41.2601 127.453 41.1173 127.577 40.9385C127.813 40.5928 127.929 40.0055 127.929 39.1826V37.7724H127.935ZM128.382 43.8599L128.174 42.7005C127.761 43.1437 127.265 43.5021 126.715 43.7559C126.173 43.9928 125.587 44.1127 124.996 44.1077C124.557 44.1292 124.118 44.0544 123.711 43.8884C123.305 43.7225 122.939 43.4695 122.64 43.1471C122.032 42.4215 121.722 41.4924 121.771 40.5469C121.738 39.7002 121.998 38.868 122.509 38.1915C123 37.5797 123.806 37.0433 124.925 36.5824L126.02 36.1817C127.342 35.6984 128.003 35.16 128.003 34.5543C128.013 34.401 127.993 34.2472 127.944 34.1017C127.895 33.9563 127.817 33.8221 127.715 33.7069C127.605 33.6052 127.476 33.527 127.335 33.477C127.194 33.427 127.045 33.4064 126.895 33.4163C126.717 33.4026 126.538 33.4306 126.372 33.498C126.207 33.5655 126.059 33.6705 125.941 33.8048C125.706 34.1573 125.599 34.5791 125.635 35.0009V35.0865H122.083C122.083 33.661 122.481 32.5965 123.273 31.9021C124.066 31.2077 125.277 30.859 126.892 30.859C127.547 30.8509 128.201 30.9186 128.841 31.0609C129.352 31.1701 129.839 31.3678 130.282 31.6451C130.741 31.9422 131.102 32.3677 131.322 32.8687C131.526 33.3439 131.628 34.2086 131.628 35.4628V40.3328C131.615 41.0898 131.65 41.8468 131.732 42.5995C131.778 43.0392 131.894 43.4687 132.074 43.8721L128.382 43.8599ZM137.165 35.8697V36.7874C137.165 38.4454 137.244 39.4946 137.4 39.9443C137.444 40.1357 137.552 40.3065 137.706 40.4283C137.86 40.5501 138.051 40.6157 138.247 40.6142C138.439 40.6217 138.628 40.5659 138.785 40.4553C138.942 40.3448 139.059 40.1856 139.116 40.0024C139.279 39.6068 139.361 38.7676 139.361 37.4848V36.9709C139.361 35.6035 139.284 34.7378 139.125 34.383C139.058 34.2139 138.939 34.0706 138.785 33.9738C138.631 33.877 138.45 33.8317 138.269 33.8446C138.099 33.8359 137.93 33.8759 137.782 33.9599C137.634 34.0439 137.513 34.1684 137.434 34.3187C137.222 34.7996 137.13 35.3242 137.165 35.8482V35.8697ZM142.9 31.2169V42.5353C142.923 43.3969 142.861 44.2587 142.714 45.108C142.615 45.6179 142.406 46.1001 142.102 46.5212C141.678 47.0608 141.112 47.4718 140.468 47.7081C139.684 47.9911 138.854 48.127 138.021 48.1089C136.54 48.1089 135.44 47.803 134.72 47.1912C134 46.5794 133.64 45.6514 133.64 44.4074H137.122C137.092 44.7718 137.183 45.1359 137.379 45.4445C137.478 45.5584 137.603 45.6474 137.743 45.7043C137.884 45.7611 138.035 45.7842 138.186 45.7718C138.367 45.7905 138.55 45.76 138.715 45.6836C138.881 45.6072 139.022 45.4875 139.125 45.3374C139.3 45.0529 139.385 44.487 139.385 43.6488V42.1652C138.992 42.5373 138.545 42.8469 138.058 43.0829C137.657 43.2722 137.219 43.3714 136.776 43.3735C136.194 43.3849 135.623 43.2114 135.146 42.8779C134.65 42.5155 134.267 42.0202 134.041 41.4493C133.875 40.9944 133.772 40.5189 133.735 40.0361C133.671 39.4243 133.64 38.6228 133.64 37.65C133.64 36.6772 133.662 35.8697 133.711 35.1355C133.744 34.5352 133.807 33.9369 133.901 33.3429C134.023 32.677 134.365 32.0715 134.873 31.6237C135.372 31.1763 136.02 30.9309 136.69 30.9354C137.242 30.9322 137.784 31.0746 138.263 31.3484C138.81 31.6866 139.29 32.1245 139.676 32.6393V31.2291L142.9 31.2169ZM148.584 37.546C148.584 39.3203 148.663 40.4368 148.819 40.8834C148.873 41.0737 148.987 41.2415 149.144 41.3618C149.301 41.4822 149.492 41.5487 149.69 41.5514C149.887 41.5542 150.081 41.493 150.241 41.3771C150.401 41.2611 150.519 41.0966 150.578 40.9079C150.734 40.4796 150.814 39.357 150.814 37.543C150.814 35.7289 150.734 34.6032 150.578 34.178C150.519 33.9895 150.4 33.8253 150.239 33.7099C150.079 33.5945 149.885 33.534 149.688 33.5374C149.49 33.5408 149.299 33.608 149.142 33.729C148.986 33.8499 148.873 34.0181 148.819 34.2086C148.663 34.6583 148.584 35.7687 148.584 37.5491V37.546ZM144.999 37.546C144.999 35.0825 145.353 33.3562 146.06 32.3671C146.768 31.378 147.98 30.8824 149.697 30.8804C151.417 30.8804 152.63 31.3719 153.338 32.3548C154.045 33.3378 154.399 35.0713 154.399 37.5552C154.399 40.0147 154.045 41.7389 153.338 42.728C152.63 43.7171 151.417 44.2106 149.697 44.2086C147.972 44.2086 146.758 43.7181 146.054 42.7372C145.35 41.7563 144.999 40.0269 144.999 37.5491V37.546Z" fill="white"/>
+      <path d="M162.873 39.2282H164.561C164.561 40.7149 164.22 41.8661 163.537 42.6819C162.853 43.4976 161.888 43.9055 160.64 43.9055C159.271 43.9055 158.258 43.3681 157.599 42.2934C156.94 41.2186 156.615 39.5596 156.623 37.3163C156.623 35.1729 156.966 33.571 157.651 32.5106C158.336 31.4552 159.37 30.926 160.762 30.926C161.264 30.8999 161.767 30.9801 162.236 31.1614C162.705 31.3428 163.13 31.6211 163.485 31.9783C164.151 32.6798 164.484 33.6373 164.482 34.8507V35.1046H162.806C162.818 34.4094 162.624 33.7259 162.249 33.1407C162.086 32.9195 161.871 32.7421 161.622 32.6241C161.374 32.5062 161.101 32.4514 160.826 32.4647C160.448 32.4452 160.073 32.5416 159.751 32.7412C159.429 32.9407 159.175 33.2338 159.025 33.5812C158.647 34.3154 158.459 35.5829 158.459 37.3836C158.459 39.1844 158.639 40.4641 159 41.2227C159.152 41.5734 159.408 41.8693 159.732 42.071C160.057 42.2727 160.435 42.3706 160.817 42.3515C161.114 42.3617 161.409 42.2928 161.67 42.152C161.932 42.0112 162.152 41.8035 162.307 41.55C162.653 41.0147 162.839 40.2438 162.861 39.2282H162.873ZM166.638 37.4111C166.638 35.2046 166.992 33.5731 167.7 32.5167C168.413 31.4521 169.496 30.9168 170.958 30.9168C172.42 30.9168 173.531 31.446 174.231 32.5014C174.932 33.5568 175.286 35.1964 175.286 37.4264C175.286 39.6565 174.935 41.2992 174.237 42.3423C173.54 43.3854 172.448 43.9055 170.958 43.9055C169.468 43.9055 168.367 43.3885 167.676 42.3515C166.984 41.3145 166.638 39.6748 166.638 37.4264V37.4111ZM168.474 37.4111C168.474 39.2466 168.663 40.5426 169.04 41.2992C169.209 41.6566 169.482 41.955 169.823 42.1557C170.164 42.3564 170.557 42.4502 170.952 42.4249C171.347 42.4479 171.74 42.3503 172.079 42.1449C172.418 41.9395 172.686 41.636 172.848 41.2747C173.232 40.5099 173.422 39.2221 173.42 37.4111C173.418 35.6002 173.228 34.3113 172.848 33.5445C172.661 33.2047 172.385 32.9214 172.051 32.7241C171.717 32.5268 171.335 32.4227 170.947 32.4227C170.559 32.4227 170.178 32.5268 169.843 32.7241C169.509 32.9214 169.234 33.2047 169.046 33.5445C168.665 34.2868 168.474 35.5788 168.474 37.4203V37.4111ZM177.559 43.5537V31.2564H179.174V32.7859C179.439 32.2254 179.865 31.7568 180.398 31.4399C180.969 31.1251 181.615 30.9698 182.267 30.9902C183.35 30.9902 184.121 31.2655 184.58 31.8162C185.039 32.3668 185.268 33.31 185.268 34.6458V43.5537H183.543V34.5173C183.583 33.9835 183.431 33.4528 183.114 33.0214C182.947 32.8488 182.744 32.7151 182.519 32.63C182.295 32.5448 182.054 32.5103 181.814 32.5289C181.474 32.5116 181.134 32.5677 180.818 32.6933C180.501 32.8189 180.215 33.0112 179.979 33.257C179.504 33.7985 179.26 34.5047 179.3 35.2239V43.5537H177.559ZM187.519 39.8584H189.23C189.233 39.8807 189.233 39.9033 189.23 39.9257C189.212 40.0411 189.202 40.1576 189.199 40.2744C189.179 40.5555 189.219 40.8377 189.318 41.1017C189.417 41.3656 189.571 41.6052 189.771 41.8039C190.237 42.1849 190.831 42.3731 191.432 42.3301C192.002 42.3614 192.562 42.1694 192.992 41.7947C193.186 41.6074 193.337 41.3808 193.435 41.1302C193.534 40.8795 193.578 40.6107 193.564 40.3417C193.564 39.373 192.82 38.6307 191.331 38.1147H191.3C189.806 37.5947 188.837 37.0787 188.394 36.5668C187.954 36.0529 187.731 35.3096 187.731 34.3307C187.731 33.2539 188.046 32.4147 188.676 31.8131C189.306 31.2115 190.184 30.9056 191.31 30.8954C192.506 30.8954 193.408 31.2013 194.014 31.7611C194.62 32.3209 194.932 33.1927 194.932 34.3154V34.4867H193.298C193.261 33.7464 193.093 33.206 192.793 32.8654C192.61 32.6854 192.391 32.547 192.15 32.4599C191.908 32.3728 191.651 32.3389 191.395 32.3607C190.843 32.315 190.295 32.4849 189.866 32.8348C189.687 33.0229 189.55 33.2464 189.463 33.4909C189.376 33.7354 189.341 33.9955 189.361 34.2542C189.356 34.5094 189.402 34.7631 189.496 35.0006C189.574 35.2102 189.708 35.3943 189.884 35.5329C190.196 35.8041 190.819 36.0907 191.753 36.3925C192.252 36.5485 192.637 36.68 192.91 36.784C193.62 37.0197 194.25 37.4512 194.727 38.0291C195.113 38.6203 195.303 39.3181 195.271 40.0236C195.271 41.2594 194.917 42.2118 194.21 42.8807C193.497 43.5506 192.49 43.8841 191.178 43.8841C189.976 43.8841 189.064 43.5782 188.446 42.9297C187.828 42.2811 187.529 41.3481 187.529 40.1092V39.8523L187.519 39.8584ZM203.543 43.5537V41.9508C203.323 42.5426 202.914 43.0457 202.38 43.3824C201.806 43.7289 201.145 43.903 200.475 43.8841C199.447 43.8841 198.7 43.6332 198.229 43.1254C197.758 42.6176 197.526 41.8162 197.526 40.7118V31.2564H199.321V40.7577C199.294 41.1842 199.429 41.6053 199.701 41.9355C199.837 42.0778 200.002 42.1887 200.185 42.2605C200.369 42.3324 200.566 42.3634 200.762 42.3515C201.122 42.372 201.481 42.3136 201.816 42.1804C202.15 42.0473 202.451 41.8425 202.698 41.5806C203.163 41.0667 203.393 40.357 203.393 39.4209V31.2564H205.137V43.5537H203.543ZM207.825 43.5537V27.0991H209.545V43.5537H207.825ZM214.099 41.0055C214.099 41.5194 214.191 41.8559 214.378 42.0181C214.564 42.1802 214.99 42.2567 215.705 42.2567H215.935C215.986 42.2545 216.037 42.2484 216.088 42.2383V43.7464L215.66 43.7678C215.219 43.7892 214.935 43.8015 214.812 43.8015C214.005 43.8015 213.399 43.6393 213.004 43.3151C212.798 43.1323 212.637 42.9044 212.534 42.6492C212.431 42.394 212.387 42.1183 212.408 41.8437V32.6666H210.698V31.2564H212.408V27.9771H214.087V31.2564H216.088V32.6788H214.087V41.0116L214.099 41.0055ZM217.498 29.3292V27.0991H219.272V29.3353L217.498 29.3292ZM217.498 43.5537V31.2564H219.272V43.5537H217.498ZM221.879 43.5537V31.2564H223.494V32.7859C223.759 32.2254 224.185 31.7568 224.717 31.4399C225.289 31.1251 225.934 30.9698 226.586 30.9902C227.669 30.9902 228.44 31.2655 228.899 31.8162C229.358 32.3637 229.59 33.3059 229.59 34.6458V43.5537H227.856V34.5173C227.898 33.9833 227.746 33.4521 227.428 33.0214C227.261 32.8484 227.058 32.7145 226.833 32.6294C226.608 32.5442 226.367 32.5099 226.128 32.5289C225.787 32.5116 225.447 32.5677 225.131 32.6933C224.814 32.8189 224.528 33.0112 224.292 33.257C223.817 33.7985 223.573 34.5047 223.613 35.2239V43.5537H221.879ZM233.659 37.4356C233.659 39.1548 233.838 40.3866 234.197 41.1309C234.343 41.4734 234.589 41.7636 234.903 41.963C235.217 42.1624 235.585 42.2616 235.956 42.2475C236.339 42.2665 236.718 42.168 237.043 41.9651C237.368 41.7622 237.623 41.4647 237.773 41.1126C238.134 40.3601 238.316 39.0814 238.318 37.2765C238.318 35.5818 238.126 34.3582 237.743 33.6057C237.588 33.252 237.33 32.9534 237.002 32.7492C236.675 32.545 236.293 32.4447 235.907 32.4616C235.535 32.4516 235.169 32.5583 234.86 32.7667C234.551 32.9751 234.315 33.2749 234.185 33.6241C233.83 34.401 233.653 35.6797 233.653 37.4509L233.659 37.4356ZM232.218 44.6978H233.928C233.932 44.916 233.984 45.1308 234.081 45.3261C234.179 45.5215 234.319 45.6925 234.491 45.8266C234.919 46.1046 235.425 46.2376 235.935 46.2059C236.777 46.2059 237.384 45.9306 237.755 45.3799C238.131 44.8324 238.318 43.9483 238.318 42.7216C238.318 42.6849 238.318 42.5962 238.318 42.4555C238.318 42.3148 238.318 42.1802 238.318 42.067C238.101 42.5845 237.73 43.0232 237.256 43.3243C236.747 43.6167 236.167 43.7628 235.58 43.7464C235.004 43.767 234.434 43.621 233.938 43.3258C233.443 43.0307 233.043 42.5989 232.787 42.0823C232.175 40.977 231.869 39.2945 231.869 37.0349C231.869 35.0159 232.192 33.4986 232.836 32.483C233.136 31.9923 233.562 31.5914 234.07 31.3223C234.578 31.0532 235.15 30.9258 235.724 30.9535C236.309 30.9348 236.887 31.0925 237.382 31.4062C237.838 31.71 238.178 32.1598 238.345 32.6819V31.2564H240.013V42.9939C240.013 44.5051 239.649 45.6695 238.921 46.4873C238.196 47.3102 237.165 47.7109 235.834 47.7109C234.902 47.7504 233.986 47.4577 233.249 46.885C232.928 46.6333 232.671 46.3105 232.497 45.942C232.323 45.5735 232.237 45.1695 232.246 44.762V44.6886L232.218 44.6978Z" fill="white"/>
+    </svg>
+  </div>
+
+  <nav>
+    <button id="navT" class="on" onclick="show('t')">Opportunities<span class="badge hide" id="unreadBadge">0</span></button>
+    <button id="navS" onclick="show('s')">Saved<span class="badge hide" id="savedBadge">0</span></button>
+    <button id="navB" onclick="show('b')">Bin<span class="badge hide" id="binBadge">0</span></button>
+    <button id="navP" onclick="show('p')">Parameters</button>
+    <button id="navA" onclick="show('a')">Admin</button>
+  </nav>
+
+  <div class="foot">Tender Scanner</div>
+</aside>
+
+<main>
+  <!-- ================= PARAMETERS ================= -->
+  <section id="paneP" class="hide">
+    <h1>Judging parameters</h1>
+    <p class="lede">What the scanner treats as a relevant opportunity. Saved changes apply to the next incoming scan.</p>
+
+    <div class="panel">
+      <div class="field">
+        <label for="profile">What Coleago is looking for</label>
+        <textarea id="profile" rows="11"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="threshold">Relevance threshold — <span id="thVal">60</span> out of 100</label>
+        <input type="range" id="threshold" min="0" max="100" step="5" value="60"
+               oninput="document.getElementById('thVal').textContent=this.value">
+        <p class="note">An opportunity is kept only if it scores at or above this.</p>
+      </div>
+
+      <div class="field">
+        <label for="kwInput">Keyword gate <span class="msg" id="kwCount" style="font-weight:400"></span></label>
+        <input type="text" id="kwInput" placeholder="Type a keyword and press Enter" autocomplete="off">
+        <p class="note">Terms match at the start of a word, so a stem covers its variants: <b>consult</b> catches consultancy, consultant and consulting, and <b>spectrum</b> catches every spectrum phrase. The list covers English, French, Spanish, Portuguese, Italian and German — anything written in another language skips the gate and goes to the AI automatically. Clearing the list turns the gate off entirely.</p>
+        <div class="chips collapsed" id="chips"></div>
+        <button type="button" class="morelink hide" id="moreBtn" onclick="toggleChips()"></button>
+        <div class="actions" style="margin-top:12px">
+          <button class="ghost" type="button" onclick="restoreDefaultKeywords()">Load the full default list</button>
+          <button class="ghost" type="button" onclick="clearKeywords()">Clear all</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="check">
+          <input type="checkbox" id="logAll">
+          <span>Record every notification, not just the matches</span>
+        </label>
+        <p class="note">Useful while setting up: the Tenders page then shows everything that arrived and what was decided. Turn it off once you trust the results.</p>
+      </div>
+
+      <div class="actions">
+        <button class="primary" onclick="save()">Save parameters</button>
+        <span class="msg" id="saveMsg"></span>
+      </div>
+    </div>
+
+    <h2>Try a sample notice</h2>
+    <p class="lede">See how a piece of text scores under the current parameters. Nothing is saved or emailed.</p>
+
+    <div class="panel">
+      <div class="field">
+        <label for="secret">Ingest secret</label>
+        <input type="password" id="secret" placeholder="the INGEST_SECRET set in Vercel">
+        <p class="note">Kept in this browser only, so you enter it once.</p>
+      </div>
+
+      <div class="field">
+        <label for="sample">Notice text</label>
+        <textarea id="sample" rows="4" placeholder="Appointment of a consultant to carry out a 5G spectrum valuation study. Closing 15 August 2026."></textarea>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="testBtn" onclick="runTest()">Score this notice</button>
+        <span class="msg" id="testMsg"></span>
+      </div>
+      <div id="testOut"></div>
+    </div>
+  </section>
+
+  <!-- ================= OPPORTUNITIES ================= -->
+  <section id="paneT">
+    <h1>Opportunities</h1>
+    <p class="lede">Live opportunities and leads that passed the relevance threshold, newest first, translated into English. Tags show whether each is a tender to bid for, a consultation worth knowing about, or a lead to approach someone on. Expired notices are filtered out automatically.</p>
+    <div class="actions" style="margin-top:0;margin-bottom:18px">
+      <button class="ghost" onclick="loadRecords()">Refresh</button>
+      <button class="ghost" onclick="markAllRead()">Mark all as read</button>
+    </div>
+    <div id="listT"><p class="msg">Loading…</p></div>
+  </section>
+
+  <!-- ================= SAVED ================= -->
+  <section id="paneS" class="hide">
+    <h1>Saved</h1>
+    <p class="lede">Opportunities you have starred.</p>
+    <div id="listS"><p class="msg">Loading…</p></div>
+  </section>
+
+  <!-- ================= ADMIN ================= -->
+  <section id="paneA" class="hide">
+    <h1>Admin</h1>
+    <p class="lede">Everything the scanner has seen, and what it costs to run.</p>
+
+    <h2>Volume and cost</h2>
+    <div class="statgrid" id="statCards"><p class="msg">Loading…</p></div>
+
+    <div class="panel" style="margin-top:16px">
+      <label>Last 30 days</label>
+      <p class="note">Grey is everything received, blue is what reached the AI, green is what passed.</p>
+      <div class="chart" id="chart"></div>
+    </div>
+
+    <div class="panel">
+      <label>Cost</label>
+      <div id="costBox"><p class="msg">Loading…</p></div>
+    </div>
+
+    <div class="panel">
+      <label>By source</label>
+      <p class="note">Which watches produce volume, and which actually produce opportunities. Sources with lots of traffic and no hits are worth a tighter page filter.</p>
+      <div id="sourceBox"><p class="msg">Loading…</p></div>
+    </div>
+
+    <h2 style="margin-top:26px">Email digest</h2>
+    <div class="panel">
+      <p class="note" style="margin-top:0">A digest goes out automatically each weekday morning with everything new since the last one. Items already emailed are not repeated.</p>
+      <div class="actions" style="margin-top:12px">
+        <button class="ghost" onclick="previewDigest()">Preview the email</button>
+        <button class="primary" onclick="sendDigest()">Send it now</button>
+        <span class="msg" id="digestMsg"></span>
+      </div>
+    </div>
+
+    <h2 style="margin-top:28px">Every notification</h2>
+    <div class="subtabs" id="subtabs">
+      <button class="subtab on" onclick="showAdmin('kept')"  id="stKept">Judged and passed <span id="cKept">0</span></button>
+      <button class="subtab" onclick="showAdmin('dropped')" id="stDropped">Judged but failed <span id="cDropped">0</span></button>
+      <button class="subtab" onclick="showAdmin('gate')"    id="stGate">Never judged <span id="cGate">0</span></button>
+    </div>
+    <p class="note" id="adminNote"></p>
+    <div id="listA"><p class="msg">Loading…</p></div>
+  </section>
+
+  <!-- ================= BIN ================= -->
+  <section id="paneB" class="hide">
+    <h1>Bin</h1>
+    <p class="lede">Removed items are kept for 7 days, then deleted permanently.</p>
+    <div class="actions" style="margin-top:0;margin-bottom:18px">
+      <button class="ghost" onclick="emptyBin()">Empty the bin now</button>
+    </div>
+    <div id="listB"><p class="msg">Loading…</p></div>
+  </section>
+</main>
+
+<script>
+/* ---------------- state ---------------- */
+let KEYWORDS = [];
+let RECORDS  = [];
+let BIN_DAYS = 7;
+let CURRENT  = 'p';
+
+/* ---------------- navigation ---------------- */
+function show(which){
+  CURRENT = which;
+  const panes = {p:'paneP', t:'paneT', s:'paneS', b:'paneB', a:'paneA'};
+  const navs  = {p:'navP',  t:'navT',  s:'navS',  b:'navB',  a:'navA'};
+  for(const k in panes){
+    document.getElementById(panes[k]).classList.toggle('hide', k!==which);
+    document.getElementById(navs[k]).classList.toggle('on', k===which);
+  }
+  if(which!=='p') loadRecords();
+  if(which==='a') loadStats();
+}
+
+/* ---------------- parameters ---------------- */
+async function loadSettings(){
+  try{
+    const s = await (await fetch('/api/settings')).json();
+    document.getElementById('profile').value = s.profile || '';
+    document.getElementById('threshold').value = s.threshold ?? 60;
+    document.getElementById('thVal').textContent = s.threshold ?? 60;
+    document.getElementById('logAll').checked = s.logAll !== false;
+    KEYWORDS = Array.isArray(s.keywords) ? s.keywords.slice() : [];
+    renderChips();
+    if(s._keywordsUpdated) setMsg('saveMsg','Keyword list updated to the latest built-in version ('+KEYWORDS.length+' terms).');
+    else if(s._warning) setMsg('saveMsg','Storage is not connected, so these are the defaults.');
+  }catch(e){ setMsg('saveMsg','Could not load the parameters.'); }
+}
+
+let CHIPS_OPEN = false;
+
+function renderChips(){
+  const box = document.getElementById('chips');
+  const btn = document.getElementById('moreBtn');
+  document.getElementById('kwCount').textContent = KEYWORDS.length ? '· '+KEYWORDS.length+' terms' : '';
+
+  if(!KEYWORDS.length){
+    box.innerHTML = '<span class="msg">No keywords yet, so every change will be sent to the AI.</span>';
+    box.classList.remove('collapsed');
+    btn.classList.add('hide');
+    return;
+  }
+
+  box.innerHTML = KEYWORDS.map((k,i)=>
+    '<span class="chip">'+esc(k)+
+    '<button type="button" title="Remove" aria-label="Remove '+esc(k)+'" onclick="removeKeyword('+i+')">&times;</button></span>'
+  ).join('');
+
+  box.classList.toggle('collapsed', !CHIPS_OPEN);
+
+  // Only offer the toggle if the list is actually taller than the collapsed box.
+  const overflowing = CHIPS_OPEN || box.scrollHeight > box.clientHeight + 4;
+  btn.classList.toggle('hide', !overflowing);
+  btn.textContent = CHIPS_OPEN ? 'Show fewer' : 'Show all '+KEYWORDS.length+' keywords';
+}
+
+function toggleChips(){ CHIPS_OPEN = !CHIPS_OPEN; renderChips(); }
+
+function addKeyword(){
+  const inp = document.getElementById('kwInput');
+  // Accepts one word, or a whole comma-separated list pasted in at once.
+  const parts = inp.value.split(',').map(v=>v.trim().toLowerCase()).filter(Boolean);
+  if(!parts.length) return;
+  let added=0;
+  for(const val of parts){
+    if(!KEYWORDS.some(k=>k.toLowerCase()===val)){ KEYWORDS.push(val); added++; }
+  }
+  inp.value='';
+  renderChips();
+  if(parts.length>1) setMsg('saveMsg', 'Added '+added+' keyword'+(added===1?'':'s')+'. Remember to save.');
+}
+
+async function restoreDefaultKeywords(){
+  setMsg('saveMsg','Loading the full list…');
+  try{
+    const d = await (await fetch('/api/settings?defaults=1')).json();
+    KEYWORDS = Array.isArray(d.keywords) ? d.keywords.slice() : KEYWORDS;
+    renderChips();
+    setMsg('saveMsg','Loaded '+KEYWORDS.length+' keywords. Press Save parameters to keep them.');
+  }catch(e){ setMsg('saveMsg','Could not load the default list.'); }
+}
+function removeKeyword(i){ KEYWORDS.splice(i,1); renderChips(); }
+function clearKeywords(){ KEYWORDS=[]; renderChips(); setMsg('saveMsg','Cleared. With no keywords the gate is off — save to apply.'); }
+
+document.getElementById('kwInput').addEventListener('keydown', e=>{
+  if(e.key==='Enter' || e.key===','){ e.preventDefault(); addKeyword(); }
+  else if(e.key==='Backspace' && !e.target.value && KEYWORDS.length){ removeKeyword(KEYWORDS.length-1); }
+});
+document.getElementById('kwInput').addEventListener('blur', addKeyword);
+
+async function save(){
+  setMsg('saveMsg','Saving…');
+  const body = {
+    profile: document.getElementById('profile').value,
+    threshold: Number(document.getElementById('threshold').value),
+    keywords: KEYWORDS,
+    logAll: document.getElementById('logAll').checked
+  };
+  try{
+    const r = await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const j = await r.json();
+    setMsg('saveMsg', r.ok ? 'Saved.' : ('Not saved — '+(j.error||'unknown problem')));
+  }catch(e){ setMsg('saveMsg','Not saved — the request failed.'); }
+}
+
+/* ---------------- sample scoring ---------------- */
+document.getElementById('secret').value = localStorage.getItem('coleago_secret') || '';
+document.getElementById('secret').addEventListener('change', e=>localStorage.setItem('coleago_secret', e.target.value));
+
+async function runTest(){
+  const secret = document.getElementById('secret').value.trim();
+  const text = document.getElementById('sample').value.trim();
+  const out = document.getElementById('testOut');
+  out.innerHTML='';
+  if(!secret) return setMsg('testMsg','Enter the ingest secret first.');
+  if(!text)   return setMsg('testMsg','Add some notice text first.');
+  localStorage.setItem('coleago_secret', secret);
+  setMsg('testMsg','Scoring…');
+  document.getElementById('testBtn').disabled = true;
+  try{
+    const r = await fetch('/api/ingest',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+secret},
+      body:JSON.stringify({source:'Sample', url:'', changed_text:text, test:true})
+    });
+    const j = await r.json();
+    setMsg('testMsg','');
+    if(r.status===401){ out.innerHTML='<div class="verdict"><div class="head">That ingest secret does not match</div><div class="msg">Check the value set in Vercel.</div></div>'; }
+    else if(j.skipped){ out.innerHTML='<div class="verdict"><div class="head">Discarded before the AI — '+esc(j.reason)+'</div><div class="msg">No AI call was made, so this cost nothing.</div></div>'; }
+    else if(j.error){ out.innerHTML='<div class="verdict"><div class="head">Could not score this</div><div class="msg">'+esc(j.detail||j.error)+'</div></div>'; }
+    else{
+      const v=j.verdict||{};
+      out.innerHTML='<div class="verdict '+(v.relevant?'keep':'')+'">'+
+        '<div class="head">Scored '+esc(v.score)+' — '+(v.relevant?'would be kept':'below the threshold')+'</div>'+
+        '<div><b>'+esc(v.title||'')+'</b>'+(v.category?' · '+esc(v.category):'')+'</div>'+
+        (v.deadline?'<div class="msg">Closes '+esc(v.deadline)+'</div>':'')+
+        '<div class="why">'+esc(v.rationale||'')+'</div></div>';
+    }
+  }catch(e){ setMsg('testMsg','The request failed.'); }
+  document.getElementById('testBtn').disabled = false;
+}
+
+/* ---------------- records ---------------- */
+const TYPE_LABEL={tender:'Tender', lead:'Lead', intelligence:'Intelligence'};
+const TYPE_CLASS={tender:'tender', lead:'lead', intelligence:'intelligence'};
+const TYPE_DESC={
+  tender:'A live procurement to bid for.',
+  lead:'Happening now — worth making contact.',
+  intelligence:'Coming later — worth tracking.'
+};
+const LABEL={kept:'Kept', dropped:'Below threshold', expired:'Expired', 'no-keyword':'No keywords', empty:'Nothing received', error:'Error'};
+const COLOUR={kept:'var(--kept)', dropped:'var(--dropped)', expired:'var(--empty)', 'no-keyword':'var(--dropped)', empty:'var(--empty)', error:'var(--error)'};
+
+async function loadRecords(){
+  try{
+    const data = await (await fetch('/api/tenders')).json();
+    RECORDS  = data.records || [];
+    BIN_DAYS = data.binDays || 7;
+  }catch(e){ RECORDS = []; }
+  renderAll();
+}
+
+function isKept(r){ return (r.status || (r.relevant?'kept':'dropped')) === 'kept'; }
+
+function renderAll(){
+  const live   = RECORDS.filter(r=>!r.deletedAt);
+  const real   = live.filter(isKept);                 // the actual opportunities
+  const saved  = live.filter(r=>r.starred);
+  const binned = RECORDS.filter(r=>r.deletedAt);
+  const unread = real.filter(r=>!r.opened).length;
+
+  setBadge('unreadBadge', unread);
+  setBadge('savedBadge', saved.length);
+  setBadge('binBadge', binned.length);
+
+  paint('listT', real,   'No opportunities yet. Anything that passes the relevance threshold appears here.');
+  paint('listS', saved,  'Nothing saved yet. Star an opportunity to keep it here.');
+  paint('listB', binned, 'The bin is empty.');
+
+  // admin buckets
+  const dropped = live.filter(r=>['dropped','expired'].includes(r.status||''));
+  const gate    = live.filter(r=>['no-keyword','empty','error'].includes(r.status||''));
+  document.getElementById('cKept').textContent    = real.length;
+  document.getElementById('cDropped').textContent = dropped.length;
+  document.getElementById('cGate').textContent    = gate.length;
+  ADMIN_BUCKETS = { kept: real, dropped: dropped, gate: gate };
+  renderAdminList();
+}
+
+let ADMIN_BUCKETS = { kept:[], dropped:[], gate:[] };
+let ADMIN_VIEW = 'kept';
+const ADMIN_NOTE = {
+  kept:    'Passed the relevance threshold. These are the notices shown on the Opportunities page.',
+  dropped: 'The AI read these and scored them below the threshold. Worth skimming if you think something was missed — lower the threshold if so.',
+  gate:    'Discarded before reaching the AI, so these cost nothing. Mostly page noise. If real tenders are landing here, add a keyword.'
 };
 
-async function redis(command) {
-  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) throw new Error('Storage not connected yet');
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(command),
+function showAdmin(which){
+  ADMIN_VIEW = which;
+  ['kept','dropped','gate'].forEach(k=>{
+    document.getElementById({kept:'stKept',dropped:'stDropped',gate:'stGate'}[k]).classList.toggle('on', k===which);
   });
-  const j = await r.json();
-  return j.result;
+  renderAdminList();
 }
 
-export default async function handler(req, res) {
-  if (req.method === 'GET') {
-    // ?defaults=1 returns the built-in list, ignoring anything saved.
-    if (req.query && (req.query.defaults === '1' || req.query.defaults === 'true')) {
-      return res.status(200).json(DEFAULTS);
-    }
-    try {
-      const saved = await redis(['GET', 'coleago:settings']);
-      if (!saved) return res.status(200).json(DEFAULTS);
-
-      const parsed = JSON.parse(saved);
-      const merged = { ...DEFAULTS, ...parsed };
-
-      // If the built-in keyword list is newer than the saved one, adopt it and
-      // persist, so an updated default list takes effect without any button press.
-      if (Number(parsed.keywordsVersion || 0) < Number(DEFAULTS.keywordsVersion || 0)) {
-        merged.keywords = DEFAULTS.keywords;
-        merged.profile = DEFAULTS.profile; // the rubric changes with the version too
-        merged.keywordsVersion = DEFAULTS.keywordsVersion;
-        // Persist without the notice flag, so it only shows once.
-        const toStore = { ...merged };
-        delete toStore._keywordsUpdated;
-        delete toStore._warning;
-        try { await redis(['SET', 'coleago:settings', JSON.stringify(toStore)]); } catch (e) {}
-        merged._keywordsUpdated = true;
-      }
-      return res.status(200).json(merged);
-    } catch (e) {
-      // No storage yet — show the defaults rather than an error page.
-      return res.status(200).json({ ...DEFAULTS, _warning: String(e.message || e) });
-    }
-  }
-
-  if (req.method === 'POST') {
-    const b = req.body || {};
-    const next = { ...DEFAULTS };
-    if (typeof b.profile === 'string') next.profile = b.profile;
-    if (b.threshold != null) next.threshold = Number(b.threshold);
-    if (Array.isArray(b.keywords)) next.keywords = b.keywords;
-    if (b.logAll != null) next.logAll = !!b.logAll;
-    next.keywordsVersion = DEFAULTS.keywordsVersion;
-    try {
-      await redis(['SET', 'coleago:settings', JSON.stringify(next)]);
-      return res.status(200).json(next);
-    } catch (e) {
-      return res.status(500).json({ error: String(e.message || e) });
-    }
-  }
-
-  return res.status(405).json({ error: 'Use GET or POST' });
+function renderAdminList(){
+  document.getElementById('adminNote').textContent = ADMIN_NOTE[ADMIN_VIEW] || '';
+  const empty = {
+    kept:'Nothing has passed the threshold yet.',
+    dropped:'Nothing has been judged and rejected yet.',
+    gate:'Nothing has been filtered out yet.'
+  }[ADMIN_VIEW];
+  paint('listA', ADMIN_BUCKETS[ADMIN_VIEW] || [], empty);
 }
+
+function setBadge(id,n){
+  const el=document.getElementById(id);
+  el.textContent=n;
+  el.classList.toggle('hide', !n);
+}
+
+function paint(elId, items, emptyText){
+  const el = document.getElementById(elId);
+  if(!items.length){ el.innerHTML = '<div class="empty-state">'+esc(emptyText)+'</div>'; return; }
+  el.innerHTML = items.map(card).join('');
+}
+
+function card(t){
+  const st = t.status || (t.relevant?'kept':'dropped');
+  const label = LABEL[st] || st;
+  const colour = COLOUR[st] || 'var(--dropped)';
+  const inBin = !!t.deletedAt;
+  const unread = !inBin && !t.opened;
+
+  let actions;
+  if(inBin){
+    const left = Math.max(0, BIN_DAYS - Math.floor((Date.now()-new Date(t.deletedAt).getTime())/86400000));
+    actions = '<div class="binmeta">Deleted permanently in '+left+' day'+(left===1?'':'s')+'</div>'+
+      '<div class="acts">'+
+      '<button class="iconbtn" onclick="act(event,\''+t.id+'\',\'restore\')">Restore</button>'+
+      '<button class="iconbtn danger" onclick="act(event,\''+t.id+'\',\'deleteForever\')">Delete now</button>'+
+      '</div>';
+  } else {
+    actions = '<div class="acts">'+
+      '<button class="iconbtn'+(t.starred?' starred':'')+'" onclick="act(event,\''+t.id+'\',\''+(t.starred?'unstar':'star')+'\')">'+
+        (t.starred?'★ Saved':'☆ Save')+'</button>'+
+      '<button class="iconbtn" onclick="act(event,\''+t.id+'\',\''+(t.opened?'unopen':'open')+'\')">'+
+        (t.opened?'Mark unread':'Mark read')+'</button>'+
+      '<button class="iconbtn danger" onclick="act(event,\''+t.id+'\',\'bin\')">Remove</button>'+
+      '</div>';
+  }
+
+  return '<div class="rec'+(unread?' unread':'')+'" style="border-left-color:'+colour+'"'+
+    (unread?' onclick="act(event,\''+t.id+'\',\'open\')"':'')+'>'+
+    '<div class="top"><span class="title">'+
+      (unread?'<span class="dot" style="display:inline-block;margin-right:7px"></span>':'')+
+      esc(t.title||'Untitled')+'</span>'+
+    (t.score!=null?'<span class="score">'+esc(t.score)+'</span>':'')+'</div>'+
+    '<div style="margin:7px 0 5px">'+
+      '<span class="typetag '+esc(TYPE_CLASS[t.type]||'unknown')+'">'+esc(TYPE_LABEL[t.type]||'Uncategorised')+'</span>'+
+      '<span class="typedesc">'+esc(TYPE_DESC[t.type]||'')+'</span>'+
+      '</div>'+
+    '<div class="meta"><span class="tag" style="color:'+colour+'">'+esc(label)+'</span> · '+
+      esc(t.source||'unknown source')+
+      (t.language && t.language.toLowerCase()!=='english' ? ' · <span class="langtag">translated from '+esc(t.language)+'</span>' : '')+
+      (t.category?' · '+esc(t.category):'')+
+      (t.deadline?' · closes '+esc(t.deadline):'')+
+      (t.savedAt?' · '+esc(new Date(t.savedAt).toLocaleString()):'')+'</div>'+
+    (t.rationale?'<div class="why">'+esc(t.rationale)+'</div>':'')+
+    (t.preview?'<div class="raw">'+esc(t.preview)+'</div>':'')+
+    (t.url?'<a href="'+esc(t.url)+'" target="_blank" rel="noreferrer" onclick="event.stopPropagation()">Open the source page</a>':'')+
+    actions+
+    '</div>';
+}
+
+/* optimistic update, then persist */
+async function act(ev, id, action){
+  if(ev) ev.stopPropagation();
+  const rec = RECORDS.find(r=>r.id===id);
+  if(rec){
+    if(action==='star') rec.starred=true;
+    else if(action==='unstar') rec.starred=false;
+    else if(action==='open') rec.opened=true;
+    else if(action==='unopen') rec.opened=false;
+    else if(action==='bin') rec.deletedAt=new Date().toISOString();
+    else if(action==='restore') delete rec.deletedAt;
+    else if(action==='deleteForever') RECORDS = RECORDS.filter(r=>r.id!==id);
+    renderAll();
+  }
+  try{
+    await fetch('/api/tenders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,id})});
+  }catch(e){ loadRecords(); }
+}
+
+async function markAllRead(){
+  const unread = RECORDS.filter(r=>!r.deletedAt && !r.opened);
+  unread.forEach(r=>r.opened=true);
+  renderAll();
+  for(const r of unread){
+    try{ await fetch('/api/tenders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'open',id:r.id})}); }catch(e){}
+  }
+}
+
+async function emptyBin(){
+  if(!confirm('Delete everything in the bin permanently?')) return;
+  RECORDS = RECORDS.filter(r=>!r.deletedAt);
+  renderAll();
+  try{ await fetch('/api/tenders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'emptyBin'})}); }catch(e){ loadRecords(); }
+}
+
+/* ---------------- analytics ---------------- */
+let STATS = null;
+
+let STATS_ERROR = '';
+
+async function loadStats(){
+  STATS = null; STATS_ERROR = '';
+  try{
+    const r = await fetch('/api/stats');
+    const body = await r.text();
+    if(!r.ok){
+      STATS_ERROR = 'The /api/stats endpoint returned HTTP '+r.status+'. '+
+        (r.status===404 ? 'That usually means api/stats.js has not been added to the repository yet.' : '');
+    } else {
+      try{ STATS = JSON.parse(body); }
+      catch(e){ STATS_ERROR = 'The endpoint did not return JSON. It replied with: '+body.slice(0,120); }
+    }
+  }catch(e){ STATS_ERROR = 'The request failed: '+(e.message||e); }
+  renderStats();
+}
+
+function n(x){ return (x||0).toLocaleString(); }
+function money(x){ return '$' + (x||0).toFixed(x < 1 ? 3 : 2); }
+
+function renderStats(){
+  const cards = document.getElementById('statCards');
+  const costBox = document.getElementById('costBox');
+  const sourceBox = document.getElementById('sourceBox');
+  const chart = document.getElementById('chart');
+
+  if(!STATS){
+    const m = '<p class="msg">'+esc(STATS_ERROR || 'Could not load the figures.')+'</p>';
+    cards.innerHTML = m; costBox.innerHTML = m; sourceBox.innerHTML = ''; chart.innerHTML = '';
+    return;
+  }
+  if(STATS.warning){
+    sourceBox.innerHTML = '<p class="msg">Storage note: '+esc(STATS.warning)+'</p>';
+  }
+  const p = STATS.periods || {};
+  if(!p.today){
+    const m = '<p class="msg">No figures yet. Numbers start accumulating from the first notification after this update was deployed.</p>';
+    cards.innerHTML = m; costBox.innerHTML=''; chart.innerHTML=''; return;
+  }
+
+  const cardHtml = (label, v) => {
+    const passRate = v.judged ? Math.round(100*v.kept/v.judged) : 0;
+    const savedPct = v.received ? Math.round(100*v.gated/v.received) : 0;
+    return '<div class="statcard">'+
+      '<div class="n">'+n(v.received)+'</div>'+
+      '<div class="l">changes received · '+label+'</div>'+
+      '<div class="sub">'+n(v.judged)+' judged · '+n(v.kept)+' passed'+
+      (v.judged?' ('+passRate+'%)':'')+'<br>'+
+      n(v.gated)+' filtered free'+(v.received?' ('+savedPct+'%)':'')+
+      (v.repeats?'<br>'+n(v.repeats)+' repeats blocked':'')+
+      '<br>'+money(v.cost)+' spent</div></div>';
+  };
+
+  cards.innerHTML =
+    cardHtml('today', p.today) +
+    cardHtml('last 7 days', p.week) +
+    cardHtml('last 30 days', p.month) +
+    cardHtml('all time', p.all);
+
+  // ---- chart ----
+  const max = Math.max(1, ...(STATS.series||[]).map(d=>d.received));
+  chart.innerHTML = (STATS.series||[]).map(d=>{
+    const h = v => Math.round(100 * v / max);
+    const tip = d.day+': '+d.received+' received, '+d.judged+' judged, '+d.kept+' passed';
+    return '<div class="col" data-tip="'+esc(tip)+'">'+
+      '<div class="seg" style="height:'+h(d.received-d.judged)+'%;background:#E2E7EC"></div>'+
+      '<div class="seg" style="height:'+h(d.judged-d.kept)+'%;background:#9DC3E6"></div>'+
+      '<div class="seg" style="height:'+h(d.kept)+'%;background:var(--kept)"></div>'+
+      '</div>';
+  }).join('') ;
+  if(!chart.nextElementSibling || !chart.nextElementSibling.classList.contains('chartkey')){
+    chart.insertAdjacentHTML('afterend',
+      '<div class="chartkey">'+
+      '<span><i class="swatch" style="background:#E2E7EC"></i>filtered free</span>'+
+      '<span><i class="swatch" style="background:#9DC3E6"></i>judged, not relevant</span>'+
+      '<span><i class="swatch" style="background:var(--kept)"></i>passed</span></div>');
+  }
+
+  // ---- cost ----
+  const a = p.all;
+  document.getElementById('costBox').innerHTML =
+    '<table class="data">'+
+    '<tr><td>Spent so far (all time)</td><td class="num"><b>'+money(a.cost)+'</b></td></tr>'+
+    '<tr><td>Cost per judgement</td><td class="num">'+money(STATS.perJudgement)+'</td></tr>'+
+    '<tr><td>Projected monthly at this rate</td><td class="num"><b>'+money(STATS.projectedMonthly)+'</b></td></tr>'+
+    '<tr><td>Tokens used</td><td class="num">'+n(a.in_tokens)+' in · '+n(a.out_tokens)+' out</td></tr>'+
+    '<tr><td>Judgements skipped by the keyword gate</td><td class="num">'+n(a.gated)+
+      ' (saved about '+money(a.gated*STATS.perJudgement)+')</td></tr>'+
+    '<tr><td>Repeats blocked before the AI</td><td class="num">'+n(a.repeats)+
+      ' (saved about '+money((a.repeats||0)*STATS.perJudgement)+')</td></tr>'+
+    '<tr><td>Expired or stale, discarded</td><td class="num">'+n(a.expired)+'</td></tr>'+
+    '<tr><td>Errors</td><td class="num">'+n(a.errors)+'</td></tr>'+
+    '</table>'+
+    '<p class="note">Based on '+STATS.pricing.inputPerM.toFixed(2)+' per million input tokens and '+
+    STATS.pricing.outputPerM.toFixed(2)+' per million output tokens, measured from actual usage. '+
+    'Projection uses '+STATS.activeDays+' active day'+(STATS.activeDays===1?'':'s')+' of data.</p>';
+
+  // ---- sources ----
+  const sb = document.getElementById('sourceBox');
+  if(!(STATS.sources||[]).length){ sb.innerHTML='<p class="msg">No source data yet.</p>'; }
+  else{
+    sb.innerHTML = '<table class="data"><tr><th>Source</th><th class="num">Received</th>'+
+      '<th class="num">Judged</th><th class="num">Passed</th><th class="num">Hit rate</th></tr>'+
+      (STATS.sources||[]).map(s=>{
+        const rate = s.judged ? Math.round(100*s.kept/s.judged)+'%' : '—';
+        return '<tr><td>'+esc(s.source)+'</td><td class="num">'+n(s.received)+
+          '</td><td class="num">'+n(s.judged)+'</td><td class="num">'+n(s.kept)+
+          '</td><td class="num">'+rate+'</td></tr>';
+      }).join('')+'</table>';
+  }
+}
+
+/* ---------------- email digest ---------------- */
+function digestKey(){
+  const k = (document.getElementById('secret')||{}).value || localStorage.getItem('coleago_secret') || '';
+  return k.trim();
+}
+
+function previewDigest(){
+  const k = digestKey();
+  if(!k) return setMsg('digestMsg','Enter the ingest secret on the Parameters page first.');
+  window.open('/api/digest?preview=1&force=1&key='+encodeURIComponent(k), '_blank');
+}
+
+async function sendDigest(){
+  const k = digestKey();
+  if(!k) return setMsg('digestMsg','Enter the ingest secret on the Parameters page first.');
+  setMsg('digestMsg','Sending…');
+  try{
+    const r = await fetch('/api/digest?key='+encodeURIComponent(k));
+    const j = await r.json();
+    if(j.sent) setMsg('digestMsg','Sent — '+j.count+' item'+(j.count===1?'':'s')+' to '+(j.to||[]).join(', '));
+    else setMsg('digestMsg', j.reason || j.error || 'Not sent.');
+  }catch(e){ setMsg('digestMsg','The request failed.'); }
+}
+
+/* ---------------- helpers ---------------- */
+function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function setMsg(id,t){ document.getElementById(id).textContent=t; }
+
+loadSettings();
+loadRecords();
+</script>
+</body>
+</html>
