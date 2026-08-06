@@ -191,6 +191,10 @@
   .subtab.on{background:var(--brand); border-color:var(--brand); color:#fff}
   .subtab span{opacity:.75; font-weight:500}
 
+  .typetag{border-radius:4px; padding:1px 7px; font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.03em}
+  .typetag.tender{background:#E7F3EA; color:#1A7F45}
+  .typetag.consultation{background:#EFEAF7; color:#5B3E96}
+  .typetag.intelligence{background:#FFF3E0; color:#A66B00}
   .langtag{background:#EEF3F9; color:var(--brand); border-radius:4px; padding:1px 6px; font-weight:600; font-size:11.5px}
   .binmeta{font-size:12px; color:var(--empty); font-weight:600; margin-top:8px}
 
@@ -302,7 +306,7 @@
   <!-- ================= OPPORTUNITIES ================= -->
   <section id="paneT">
     <h1>Opportunities</h1>
-    <p class="lede">Notices that passed the relevance threshold, newest first, translated into English. Everything else is in Admin.</p>
+    <p class="lede">Live opportunities and leads that passed the relevance threshold, newest first, translated into English. Tags show whether each is a tender to bid for, a consultation worth knowing about, or a lead to approach someone on. Expired notices are filtered out automatically.</p>
     <div class="actions" style="margin-top:0;margin-bottom:18px">
       <button class="ghost" onclick="loadRecords()">Refresh</button>
       <button class="ghost" onclick="markAllRead()">Mark all as read</button>
@@ -512,8 +516,8 @@ async function runTest(){
 }
 
 /* ---------------- records ---------------- */
-const LABEL={kept:'Kept', dropped:'Below threshold', 'no-keyword':'No keywords', empty:'Nothing received', error:'Error'};
-const COLOUR={kept:'var(--kept)', dropped:'var(--dropped)', 'no-keyword':'var(--dropped)', empty:'var(--empty)', error:'var(--error)'};
+const LABEL={kept:'Kept', dropped:'Below threshold', expired:'Expired', 'no-keyword':'No keywords', empty:'Nothing received', error:'Error'};
+const COLOUR={kept:'var(--kept)', dropped:'var(--dropped)', expired:'var(--empty)', 'no-keyword':'var(--dropped)', empty:'var(--empty)', error:'var(--error)'};
 
 async function loadRecords(){
   try{
@@ -542,7 +546,7 @@ function renderAll(){
   paint('listB', binned, 'The bin is empty.');
 
   // admin buckets
-  const dropped = live.filter(r=>(r.status||'')==='dropped');
+  const dropped = live.filter(r=>['dropped','expired'].includes(r.status||''));
   const gate    = live.filter(r=>['no-keyword','empty','error'].includes(r.status||''));
   document.getElementById('cKept').textContent    = real.length;
   document.getElementById('cDropped').textContent = dropped.length;
@@ -620,7 +624,9 @@ function card(t){
       (unread?'<span class="dot" style="display:inline-block;margin-right:7px"></span>':'')+
       esc(t.title||'Untitled')+'</span>'+
     (t.score!=null?'<span class="score">'+esc(t.score)+'</span>':'')+'</div>'+
-    '<div class="meta"><span class="tag" style="color:'+colour+'">'+esc(label)+'</span> · '+
+    '<div class="meta">'+
+      (t.type?'<span class="typetag '+esc(t.type)+'">'+esc(t.type==='intelligence'?'lead':t.type)+'</span> · ':'')+
+      '<span class="tag" style="color:'+colour+'">'+esc(label)+'</span> · '+
       esc(t.source||'unknown source')+
       (t.language && t.language.toLowerCase()!=='english' ? ' · <span class="langtag">translated from '+esc(t.language)+'</span>' : '')+
       (t.category?' · '+esc(t.category):'')+
@@ -762,6 +768,7 @@ function renderStats(){
       ' (saved about '+money(a.gated*STATS.perJudgement)+')</td></tr>'+
     '<tr><td>Repeats blocked before the AI</td><td class="num">'+n(a.repeats)+
       ' (saved about '+money((a.repeats||0)*STATS.perJudgement)+')</td></tr>'+
+    '<tr><td>Expired or stale, discarded</td><td class="num">'+n(a.expired)+'</td></tr>'+
     '<tr><td>Errors</td><td class="num">'+n(a.errors)+'</td></tr>'+
     '</table>'+
     '<p class="note">Based on '+STATS.pricing.inputPerM.toFixed(2)+' per million input tokens and '+
