@@ -15,13 +15,17 @@ WHAT COLEAGO DOES, in rough order of importance:
 7. Infrastructure sharing and towers: TowerCo strategy, passive and active sharing, RAN sharing (MORAN/MOCN), colocation, sale and leaseback, master lease agreements.
 8. Licensing and capacity building: licence applications, greenfield and new operator licences, spectrum management training, telecoms training and mini-MBAs, workshops, knowledge transfer.
 
-THREE KINDS OF NOTICE, all of which can be worth flagging:
+THREE CATEGORIES. Every relevant notice must be classified as exactly one:
 
-A. TENDER — a procurement Coleago could bid for: an RFP, ITT, EOI, RFQ, call for proposals, prequalification, or any invitation to supply consultancy, advisory, study, modelling or training services. Set "type" to "tender".
+A. TENDER — an actual procurement Coleago can bid for right now: an RFP, ITT, EOI, RFQ, call for proposals, prequalification, or any invitation to supply consultancy, advisory, study, modelling or training services. This is the most important category. Set "type" to "tender".
 
-B. CONSULTATION — a public consultation, call for comments, draft regulation or discussion paper. IMPORTANT: Coleago does NOT respond to public consultations, so these are never bid opportunities. Treat them purely as a signal that something is happening in that country which Coleago could advise an operator or regulator on. Judge them ONLY on whether the SUBJECT MATTER falls within Coleago's work above. A consultation on spectrum awards, licence fees, market reviews or interconnection is valuable intelligence and should score well. A consultation on unrelated matters — consumer complaints handling, postal services, broadcasting content, staff regulations, cybersecurity rules, data protection, general administrative procedure — is NOT relevant and must be scored 0-20 and disregarded, however officially it is worded. Set "type" to "consultation".
+B. LEAD — something is HAPPENING NOW that Coleago can act on immediately by approaching a regulator or operator. A spectrum auction is under way or has just been announced, a licence is being renewed, a market review has opened, an operator is being privatised or merged, a band is being released, a national plan has just been launched, or a public consultation has opened on a subject within Coleago's work. Not a procurement, but a live reason to make contact today. Set "type" to "lead".
 
-C. INTELLIGENCE — news or an announcement that is not a procurement at all, but signals work coming: an upcoming or planned spectrum auction, a licence due for renewal, a new national broadband or 5G plan, a merger or privatisation, a new licensing framework, a regulator announcing a market review or a band being released. Coleago can approach the regulator or operators off the back of these. Score these on how strongly they signal advisory work Coleago could win. Set "type" to "intelligence".
+C. INTELLIGENCE — highly relevant, but it concerns something that will happen in the FUTURE rather than now. A regulator states it intends to auction spectrum next year, plans a licensing framework, signals a future band release, or sets out a roadmap or strategy for coming years. Worth knowing and worth tracking, but there is nothing to act on this week. Set "type" to "intelligence".
+
+The difference between LEAD and INTELLIGENCE is timing. If it is live, open, under way or just announced, it is a LEAD. If it is planned, intended, proposed or scheduled for a later period, it is INTELLIGENCE.
+
+PUBLIC CONSULTATIONS. Coleago does NOT respond to public consultations, so they are never tenders. Treat a consultation purely as a signal, and classify it as a LEAD (if it is open now) or INTELLIGENCE (if it concerns something later). Judge it ONLY on whether the SUBJECT MATTER falls within Coleago's work. A consultation on spectrum awards, licence fees, market reviews or interconnection is valuable. A consultation on unrelated matters — consumer complaints handling, postal services, broadcasting content, staff regulations, cybersecurity rules, data protection, general administrative procedure — is NOT relevant and must be scored 0-20, however officially it is worded.
 
 DATES — CHECK THESE CAREFULLY. Today's date is given in the message.
 - If the notice states a submission deadline, closing date, bid date or similar and that date has ALREADY PASSED, it is dead. Score it 0-10, set "expired" to true, and say so in the rationale.
@@ -30,8 +34,8 @@ DATES — CHECK THESE CAREFULLY. Today's date is given in the message.
 - Never treat a FUTURE date as expired.
 
 HOW TO SCORE (after the date check)
-85-100: squarely within Coleago's areas — a tender for spectrum, auction, valuation, regulatory or telecoms strategy work, or a strong intelligence signal such as an announced spectrum auction.
-70-84: consultancy, advisory, study, modelling or training work in telecoms or digital infrastructure Coleago could credibly bid for, or a consultation whose subject matter is clearly within their areas.
+85-100: squarely within Coleago's areas — a tender for spectrum, auction, valuation, regulatory or telecoms strategy work, or a strong lead such as a spectrum auction now under way.
+70-84: consultancy, advisory, study, modelling or training work in telecoms or digital infrastructure Coleago could credibly bid for, or a lead or intelligence item whose subject matter is clearly within their areas.
 40-69: telecoms-related but the scope is unclear, small, or only loosely advisory.
 0-30: not relevant. Equipment or hardware supply, construction and civil works, cabling, vehicles, cleaning, catering, security, generic staffing, office IT, software licences, routine administrative notices, staff appointments, or a consultation on subject matter outside Coleago's work.
 
@@ -41,7 +45,7 @@ Judge the substance, not the wording. A notice that merely mentions telecoms whi
   logAll: true, // VERIFICATION MODE: record every notification, not just the keepers
   // Bump this whenever the built-in keyword list changes. Saved settings with an
   // older stamp automatically pick up the new list, so the default really is the default.
-  keywordsVersion: 3,
+  keywordsVersion: 4,
 };
 
 async function redis(command) {
@@ -232,6 +236,7 @@ export default async function handler(req, res) {
       // An older saved keyword list is superseded by the built-in one.
       if (Number(parsed.keywordsVersion || 0) < Number(DEFAULTS.keywordsVersion || 0)) {
         settings.keywords = DEFAULTS.keywords;
+        settings.profile = DEFAULTS.profile;
       }
     }
   } catch (e) {
@@ -333,7 +338,7 @@ notice on its meaning, not on which language it is written in.
 Reply with ONLY a JSON object, no other text:
 {"title":"","type":"","category":"","deadline":"","posted":"","expired":false,"score":0,"rationale":"","language":""}
 "title", "category" and "rationale" must be in English.
-"type" is exactly one of "tender", "consultation" or "intelligence".
+"type" is exactly one of "tender", "lead" or "intelligence".
 "deadline" is the submission or closing date as YYYY-MM-DD if one is given, otherwise "".
 "posted" is the publication date as YYYY-MM-DD if one is given, otherwise "".
 "expired" is true if the deadline has passed or the notice is more than a year old.
