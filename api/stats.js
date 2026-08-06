@@ -36,7 +36,7 @@ function flatToObject(flat) {
   return o;
 }
 
-const METRICS = ['received', 'gated', 'empty', 'judged', 'kept', 'errors', 'repeats', 'in_tokens', 'out_tokens'];
+const METRICS = ['received', 'gated', 'empty', 'judged', 'kept', 'errors', 'repeats', 'expired', 'in_tokens', 'out_tokens'];
 
 function blank() {
   const o = {};
