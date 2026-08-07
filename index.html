@@ -350,12 +350,13 @@
 
     <h2 style="margin-top:26px">Email digest</h2>
     <div class="panel">
-      <p class="note" style="margin-top:0">A digest goes out automatically each weekday morning with everything new since the last one. Items already emailed are not repeated.</p>
+      <p class="note" style="margin-top:0">A digest goes out automatically each weekday morning, whether or not anything new has come in — so silence always means nothing was found, never that something broke. Items already emailed are not repeated.</p>
       <div class="actions" style="margin-top:12px">
-        <button class="ghost" onclick="previewDigest()">Preview the email</button>
-        <button class="primary" onclick="sendDigest()">Send it now</button>
-        <span class="msg" id="digestMsg"></span>
+        <button class="ghost" onclick="previewDigest()">Preview in the browser</button>
+        <button class="ghost" onclick="sendTestDigest()">Send a test email</button>
+        <button class="primary" onclick="sendDigest()">Send today's digest</button>
       </div>
+      <p class="note" id="digestMsg" style="margin-top:10px"></p>
     </div>
 
     <h2 style="margin-top:28px">Every notification</h2>
@@ -823,6 +824,18 @@ function previewDigest(){
   window.open('/api/digest?preview=1&force=1&key='+encodeURIComponent(k), '_blank');
 }
 
+async function sendTestDigest(){
+  const k = digestKey();
+  if(!k) return setMsg('digestMsg','Enter the ingest secret on the Parameters page first.');
+  setMsg('digestMsg','Sending a test email…');
+  try{
+    const r = await fetch('/api/digest?test=1&key='+encodeURIComponent(k));
+    const j = await r.json();
+    if(j.sent) setMsg('digestMsg','Test email sent to '+(j.to||[]).join(', ')+' with three sample items. Nothing in the database was changed.');
+    else setMsg('digestMsg', (j.reason || j.error || 'Not sent.') + (j.hint ? ' — '+j.hint : ''));
+  }catch(e){ setMsg('digestMsg','The request failed.'); }
+}
+
 async function sendDigest(){
   const k = digestKey();
   if(!k) return setMsg('digestMsg','Enter the ingest secret on the Parameters page first.');
@@ -830,8 +843,9 @@ async function sendDigest(){
   try{
     const r = await fetch('/api/digest?key='+encodeURIComponent(k));
     const j = await r.json();
-    if(j.sent) setMsg('digestMsg','Sent — '+j.count+' item'+(j.count===1?'':'s')+' to '+(j.to||[]).join(', '));
-    else setMsg('digestMsg', j.reason || j.error || 'Not sent.');
+    if(j.sent && j.count===0) setMsg('digestMsg','Sent to '+(j.to||[]).join(', ')+' — nothing new to report today.');
+    else if(j.sent) setMsg('digestMsg','Sent — '+j.count+' item'+(j.count===1?'':'s')+' to '+(j.to||[]).join(', '));
+    else setMsg('digestMsg', (j.reason || j.error || 'Not sent.') + (j.hint ? ' — '+j.hint : ''));
   }catch(e){ setMsg('digestMsg','The request failed.'); }
 }
 
