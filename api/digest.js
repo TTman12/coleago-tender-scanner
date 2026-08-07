@@ -78,10 +78,20 @@ function card(t, type) {
   </td></tr>`;
 }
 
+function emptyState() {
+  return `
+    <tr><td style="padding:28px 0 24px" align="center">
+      <div style="font-size:16px;font-weight:600;color:#1B2430;font-family:Segoe UI,system-ui,Arial,sans-serif">Nothing new to report</div>
+      <div style="font-size:13.5px;color:#5A6675;margin-top:7px;line-height:1.6;font-family:Segoe UI,system-ui,Arial,sans-serif">
+        No new tenders, leads or intelligence since the last digest.<br>The scanner is running and watching as normal.
+      </div>
+    </td></tr>`;
+}
+
 function buildEmail(groups, total, dashboardUrl) {
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
-  const sections = TYPES.map((type) => {
+  const sections = total === 0 ? emptyState() : TYPES.map((type) => {
     const items = groups[type.key] || [];
     if (!items.length) return '';
     return `
@@ -102,7 +112,7 @@ function buildEmail(groups, total, dashboardUrl) {
 
     <tr><td style="background:${BRAND};padding:22px 26px">
       <div style="color:#ffffff;font-size:19px;font-weight:600;font-family:Segoe UI,system-ui,Arial,sans-serif;letter-spacing:-.01em">Coleago Tender Scanner</div>
-      <div style="color:rgba(255,255,255,.72);font-size:13px;margin-top:3px;font-family:Segoe UI,system-ui,Arial,sans-serif">${esc(today)} &middot; ${total} new item${total === 1 ? '' : 's'}</div>
+      <div style="color:rgba(255,255,255,.72);font-size:13px;margin-top:3px;font-family:Segoe UI,system-ui,Arial,sans-serif">${esc(today)} &middot; ${total === 0 ? 'nothing to report' : total + ' new item' + (total === 1 ? '' : 's')}</div>
     </td></tr>
 
     <tr><td style="padding:22px 26px 6px">
@@ -126,6 +136,12 @@ function buildEmail(groups, total, dashboardUrl) {
 }
 
 function plainText(groups, total, dashboardUrl) {
+  if (total === 0) {
+    return `Coleago Tender Scanner — nothing to report\n\n` +
+      `No new tenders, leads or intelligence since the last digest.\n` +
+      `The scanner is running and watching as normal.\n\n` +
+      `Open the dashboard: ${dashboardUrl}\n`;
+  }
   let out = `Coleago Tender Scanner — ${total} new item${total === 1 ? '' : 's'}\n\n`;
   for (const type of TYPES) {
     const items = groups[type.key] || [];
@@ -146,7 +162,8 @@ function plainText(groups, total, dashboardUrl) {
 export default async function handler(req, res) {
   const q = req.query || {};
   const isPreview = q.preview === '1';
-  const force = q.force === '1'; // resend items already emailed (for testing)
+  const force = q.force === '1';   // include items already emailed (for testing)
+  const isTest = q.test === '1';   // send a sample digest with made-up items
 
   // A manual send from the dashboard must carry the ingest secret.
   // Vercel's cron sends its own authorisation header.
@@ -162,8 +179,27 @@ export default async function handler(req, res) {
   const dashboardUrl = process.env.APP_URL ||
     (req.headers.host ? 'https://' + req.headers.host : 'https://vercel.com');
 
+  // A sample digest, so delivery can be proved before anything real arrives.
+  const SAMPLE = [
+    { id: 'sample-1', type: 'tender', status: 'kept', score: 92,
+      title: 'Appointment of a consultant for a 5G spectrum valuation and pricing study',
+      source: 'ICASA (South Africa)', category: 'Spectrum valuation',
+      deadline: '2026-09-30', url: 'https://www.icasa.org.za/bids-and-tenders/open-bids',
+      rationale: 'A direct match for Coleago: spectrum valuation and pricing advisory, exactly the firm\u2019s core work.' },
+    { id: 'sample-2', type: 'lead', status: 'kept', score: 86,
+      title: '700 MHz auction opens for applications',
+      source: 'ARCEP (Senegal)', category: 'Spectrum auction', language: 'French',
+      url: 'https://www.artpsenegal.net/',
+      rationale: 'An auction is now under way, so there is a live reason to approach the regulator and bidders about auction support.' },
+    { id: 'sample-3', type: 'intelligence', status: 'kept', score: 74,
+      title: 'Regulator signals licence renewals and a new band release for 2027',
+      source: 'NCC (Nigeria)', category: 'Licensing roadmap',
+      url: 'https://www.ncc.gov.ng/',
+      rationale: 'Nothing to act on this week, but flags spectrum work coming next year worth tracking.' },
+  ];
+
   try {
-    const all = records(await redis(['HGETALL', HASH]));
+    const all = isTest ? SAMPLE : records(await redis(['HGETALL', HASH]));
 
     // Everything relevant, not binned, not already emailed.
     const fresh = all
@@ -186,9 +222,8 @@ export default async function handler(req, res) {
       return res.status(200).send(html);
     }
 
-    if (!fresh.length) {
-      return res.status(200).json({ sent: false, reason: 'nothing new to report' });
-    }
+    // The digest goes out every day, even when there is nothing new,
+    // so silence always means "nothing found" and never "something broke".
     const hasBrevo = !!process.env.BREVO_API_KEY;
     const hasResend = !!process.env.RESEND_API_KEY;
     if ((!hasBrevo && !hasResend) || !process.env.ALERT_EMAIL) {
@@ -201,7 +236,9 @@ export default async function handler(req, res) {
 
     const to = String(process.env.ALERT_EMAIL).split(',').map((e) => e.trim()).filter(Boolean);
     const counts = TYPES.map((t) => (groups[t.key] || []).length);
-    const subject = `Coleago Tender Scanner — ${counts[0]} tender${counts[0] === 1 ? '' : 's'}, ${counts[1]} lead${counts[1] === 1 ? '' : 's'}, ${counts[2]} intelligence`;
+    const subject = (isTest ? '[Test] ' : '') + (fresh.length === 0
+      ? 'Coleago Tender Scanner — nothing to report'
+      : `Coleago Tender Scanner — ${counts[0]} tender${counts[0] === 1 ? '' : 's'}, ${counts[1]} lead${counts[1] === 1 ? '' : 's'}, ${counts[2]} intelligence`);
     const text = plainText(groups, fresh.length, dashboardUrl);
 
     // Sender address. Brevo verifies a single address (a Gmail is fine);
@@ -260,13 +297,19 @@ export default async function handler(req, res) {
     }
 
     // Mark them so the next digest does not repeat them.
+    // Sample items are not real records, so nothing is written in test mode.
     const stamp = new Date().toISOString();
-    for (const t of fresh) {
+    for (const t of (isTest ? [] : fresh)) {
       t.emailed = stamp;
       try { await redis(['HSET', HASH, t.id, JSON.stringify(t)]); } catch (e) {}
     }
 
-    return res.status(200).json({ sent: true, count: fresh.length, to, via: hasBrevo ? 'brevo' : 'resend' });
+    return res.status(200).json({
+      sent: true, count: fresh.length, to,
+      via: hasBrevo ? 'brevo' : 'resend',
+      test: isTest || undefined,
+      empty: fresh.length === 0 || undefined,
+    });
   } catch (e) {
     return res.status(500).json({ sent: false, error: String(e.message || e) });
   }
