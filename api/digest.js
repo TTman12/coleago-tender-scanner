@@ -189,10 +189,12 @@ export default async function handler(req, res) {
     if (!fresh.length) {
       return res.status(200).json({ sent: false, reason: 'nothing new to report' });
     }
-    if (!process.env.RESEND_API_KEY || !process.env.ALERT_EMAIL) {
+    const hasBrevo = !!process.env.BREVO_API_KEY;
+    const hasResend = !!process.env.RESEND_API_KEY;
+    if ((!hasBrevo && !hasResend) || !process.env.ALERT_EMAIL) {
       return res.status(200).json({
         sent: false,
-        reason: 'email is not configured — set RESEND_API_KEY and ALERT_EMAIL',
+        reason: 'email is not configured — set BREVO_API_KEY (or RESEND_API_KEY) and ALERT_EMAIL',
         wouldHaveSent: fresh.length,
       });
     }
@@ -200,24 +202,61 @@ export default async function handler(req, res) {
     const to = String(process.env.ALERT_EMAIL).split(',').map((e) => e.trim()).filter(Boolean);
     const counts = TYPES.map((t) => (groups[t.key] || []).length);
     const subject = `Coleago Tender Scanner — ${counts[0]} tender${counts[0] === 1 ? '' : 's'}, ${counts[1]} lead${counts[1] === 1 ? '' : 's'}, ${counts[2]} intelligence`;
+    const text = plainText(groups, fresh.length, dashboardUrl);
 
-    const r = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: process.env.ALERT_FROM || 'Tender Scanner <onboarding@resend.dev>',
-        to,
-        subject,
-        html,
-        text: plainText(groups, fresh.length, dashboardUrl),
-      }),
-    });
-    const sendResult = await r.json();
-    if (!r.ok) {
-      return res.status(500).json({ sent: false, error: sendResult.message || 'send failed' });
+    // Sender address. Brevo verifies a single address (a Gmail is fine);
+    // Resend needs a verified domain, so it falls back to their test sender.
+    const fromRaw = process.env.ALERT_FROM ||
+      (hasBrevo ? process.env.ALERT_EMAIL.split(',')[0].trim() : 'onboarding@resend.dev');
+    const m = String(fromRaw).match(/^\s*(.*?)\s*<(.+?)>\s*$/);
+    const fromName = (m && m[1]) || 'Coleago Tender Scanner';
+    const fromEmail = (m && m[2]) || String(fromRaw).trim();
+
+    let r, sendResult;
+    if (hasBrevo) {
+      // Brevo — free tier allows a single verified sender, no domain needed.
+      r = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': process.env.BREVO_API_KEY,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: fromName, email: fromEmail },
+          to: to.map((e) => ({ email: e })),
+          subject,
+          htmlContent: html,
+          textContent: text,
+        }),
+      });
+      sendResult = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        return res.status(500).json({
+          sent: false,
+          error: sendResult.message || 'Brevo rejected the send',
+          hint: 'Check the sender address is verified in Brevo under Senders & IPs.',
+        });
+      }
+    } else {
+      r = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: `${fromName} <${fromEmail}>`,
+          to,
+          subject,
+          html,
+          text,
+        }),
+      });
+      sendResult = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        return res.status(500).json({ sent: false, error: sendResult.message || 'send failed' });
+      }
     }
 
     // Mark them so the next digest does not repeat them.
@@ -227,7 +266,7 @@ export default async function handler(req, res) {
       try { await redis(['HSET', HASH, t.id, JSON.stringify(t)]); } catch (e) {}
     }
 
-    return res.status(200).json({ sent: true, count: fresh.length, to });
+    return res.status(200).json({ sent: true, count: fresh.length, to, via: hasBrevo ? 'brevo' : 'resend' });
   } catch (e) {
     return res.status(500).json({ sent: false, error: String(e.message || e) });
   }
