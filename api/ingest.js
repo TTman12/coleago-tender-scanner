@@ -234,7 +234,26 @@ function looksLikeCoveredLanguage(hay) {
   return false;
 }
 
+// Everything is wrapped so the monitor never sees a 500. A failure here means a
+// notification is lost silently and changedetection.io logs an error, so we
+// always answer 200 and record the problem instead.
 export default async function handler(req, res) {
+  try {
+    return await handleIngest(req, res);
+  } catch (e) {
+    const msg = String((e && e.message) || e);
+    console.log('INGEST unhandled |', msg);
+    try {
+      await record({
+        source: 'unknown', url: '', savedAt: new Date().toISOString(),
+        preview: '', status: 'error', title: '(ingest failed)', rationale: msg,
+      });
+    } catch (e2) { /* never throw from the error path */ }
+    return res.status(200).json({ skipped: true, reason: 'ingest error', detail: msg });
+  }
+}
+
+async function handleIngest(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST' });
 
   // Only your change detector may come through this door.
@@ -247,16 +266,28 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'unauthorized' });
   }
 
-  // Body may arrive already-parsed or as a raw string.
-  let body = req.body || {};
+  // The body can arrive parsed, as a raw string, as an array, or as nothing at
+  // all (some notifications fire with an empty payload). None of that is fatal.
+  let body = req.body;
+  if (body == null) body = {};
   if (typeof body === 'string') {
-    try { body = JSON.parse(body); } catch { body = { changed_text: body }; }
+    const trimmed = body.trim();
+    if (!trimmed || trimmed === 'null' || trimmed === 'undefined') body = {};
+    else {
+      try { body = JSON.parse(trimmed); } catch { body = { changed_text: trimmed }; }
+    }
   }
+  if (Array.isArray(body)) body = body[0] || {};
+  if (typeof body !== 'object') body = {};
 
-  const source = body.source || body.title || '';
+  const source = body.source || body.title || body.watch_title || '';
   const url = body.url || body.watch_url || '';
   // Accept several field names so different tools work without fuss.
-  const text = String(body.changed_text || body.diff || body.message || body.body || '').trim();
+  // Cap the incoming text: some regulator pages produce enormous diffs, and only
+  // the first part is ever judged anyway.
+  const MAX_TEXT = 20000;
+  let text = String(body.changed_text || body.diff || body.message || body.body || '').trim();
+  if (text.length > MAX_TEXT) text = text.slice(0, MAX_TEXT);
   const isTest = body.test === true || body.test === 'true';
 
   // Load the judging settings you set in the dashboard.
@@ -404,7 +435,7 @@ short rationale saying there was no notice in the change.`,
     console.log('INGEST judge-failed |', source, '|', msg);
     if (!isTest) await bump({ judged: 1, errors: 1 }, source);
     if (logAll && !isTest) await record({ ...base, status: 'error', title: '(judge failed)', rationale: msg });
-    return res.status(500).json({ error: 'judge failed', detail: msg });
+    return res.status(200).json({ skipped: true, reason: 'judge failed', detail: msg });
   }
 
   // Backstop the model's date check in code, so an expired notice can never be kept.
