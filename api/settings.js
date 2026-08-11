@@ -44,7 +44,7 @@ Judge the substance, not the wording. A notice that merely mentions telecoms whi
   logAll: true, // VERIFICATION MODE: record every notification, not just the keepers
   // Bump this whenever the built-in keyword list changes. Saved settings with an
   // older stamp automatically pick up the new list, so the default really is the default.
-  keywordsVersion: 4,
+  keywordsVersion: 5,
 };
 
 async function redis(command) {
