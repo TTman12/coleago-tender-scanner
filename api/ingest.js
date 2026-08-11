@@ -45,7 +45,7 @@ Judge the substance, not the wording. A notice that merely mentions telecoms whi
   logAll: true, // VERIFICATION MODE: record every notification, not just the keepers
   // Bump this whenever the built-in keyword list changes. Saved settings with an
   // older stamp automatically pick up the new list, so the default really is the default.
-  keywordsVersion: 4,
+  keywordsVersion: 5,
 };
 
 async function redis(command) {
@@ -154,6 +154,39 @@ async function record(entry) {
   } catch (e) {
     console.log('could not save record:', String(e.message || e));
   }
+}
+
+// The model is asked for JSON, but occasionally replies with prose instead
+// (typically when the "change" is meaningless navigation noise and it says
+// something like "I cannot provide..."). Pull JSON out if it is in there,
+// and treat a plain refusal as "nothing of interest" rather than an error.
+function extractVerdict(raw) {
+  const text = String(raw || '').replace(/```json|```/g, '').trim();
+  if (!text) return null;
+
+  // Straight parse first.
+  try { return JSON.parse(text); } catch (e) { /* keep going */ }
+
+  // Then the outermost { ... } found anywhere in the reply.
+  const first = text.indexOf('{');
+  const last = text.lastIndexOf('}');
+  if (first !== -1 && last > first) {
+    try { return JSON.parse(text.slice(first, last + 1)); } catch (e) { /* keep going */ }
+  }
+
+  // A refusal or explanation with no JSON at all: there was nothing to judge.
+  return {
+    title: '(nothing of substance in this change)',
+    type: 'intelligence',
+    category: '',
+    deadline: '',
+    posted: '',
+    expired: false,
+    score: 0,
+    rationale: 'The change contained no readable notice — usually navigation or layout noise rather than content.',
+    language: 'English',
+    _noContent: true,
+  };
 }
 
 // Escapes a term for use in a regular expression.
@@ -336,14 +369,23 @@ category and rationale into clear English regardless of the original language. J
 notice on its meaning, not on which language it is written in.
 
 Reply with ONLY a JSON object, no other text:
-{"title":"","type":"","category":"","deadline":"","posted":"","expired":false,"score":0,"rationale":"","language":""}
+{"title":"","issuer":"","type":"","category":"","deadline":"","posted":"","expired":false,"score":0,"rationale":"","language":""}
 "title", "category" and "rationale" must be in English.
+"issuer" names the organisation and country in the form "Regulator (Country)", for example
+"ICASA (South Africa)" or "ARCEP (Senegal)". Work it out from the source, the web address and
+the text. Use the short well-known acronym where there is one. If the country is genuinely
+unclear, give just the organisation name.
 "type" is exactly one of "tender", "lead" or "intelligence".
 "deadline" is the submission or closing date as YYYY-MM-DD if one is given, otherwise "".
 "posted" is the publication date as YYYY-MM-DD if one is given, otherwise "".
 "expired" is true if the deadline has passed or the notice is more than a year old.
 "language" is the English name of the original language, or "English".
-score is 0-100. Never invent details not in the text.`,
+score is 0-100. Never invent details not in the text.
+
+Reply with the JSON object and nothing else, in every case without exception. If the text
+is meaningless — navigation, menus, cookie banners, a changed number, or layout noise with
+no actual notice in it — do NOT explain that; simply return the JSON with score 0 and a
+short rationale saying there was no notice in the change.`,
         messages: [{
           role: 'user',
           content: `Today's date is ${new Date().toISOString().slice(0, 10)}. Use it for every date check.\n\nSource: ${source}\nPage: ${url}\n\nChanged text:\n${text.slice(0, 6000)}`,
@@ -353,7 +395,8 @@ score is 0-100. Never invent details not in the text.`,
     const data = await r.json();
     if (data.error) throw new Error(data.error.message || 'Claude error');
     const raw = (data.content || []).map((c) => c.text || '').join('');
-    verdict = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    verdict = extractVerdict(raw);
+    if (!verdict) throw new Error('empty reply from the model');
     // Real token usage, so cost reporting is measured rather than estimated.
     usage = data.usage || {};
   } catch (e) {
