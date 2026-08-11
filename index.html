@@ -319,7 +319,7 @@
   <!-- ================= SAVED ================= -->
   <section id="paneS" class="hide">
     <h1>Saved</h1>
-    <p class="lede">Opportunities you have starred.</p>
+    <p class="lede">Opportunities you have starred. Starring moves an item here out of the Opportunities list.</p>
     <div id="listS"><p class="msg">Loading…</p></div>
   </section>
 
@@ -552,8 +552,9 @@ function isKept(r){ return (r.status || (r.relevant?'kept':'dropped')) === 'kept
 
 function renderAll(){
   const live   = RECORDS.filter(r=>!r.deletedAt);
-  const real   = live.filter(isKept);                 // the actual opportunities
   const saved  = live.filter(r=>r.starred);
+  // Starring moves an item out of Opportunities and into Saved.
+  const real   = live.filter(r=>isKept(r) && !r.starred);
   const binned = RECORDS.filter(r=>r.deletedAt);
   const unread = real.filter(r=>!r.opened).length;
 
@@ -561,17 +562,18 @@ function renderAll(){
   setBadge('savedBadge', saved.length);
   setBadge('binBadge', binned.length);
 
-  paint('listT', real,   'No opportunities yet. Anything that passes the relevance threshold appears here.');
-  paint('listS', saved,  'Nothing saved yet. Star an opportunity to keep it here.');
+  paint('listT', real,   'No opportunities yet. Anything that passes the relevance threshold appears here.', true);
+  paint('listS', saved,  'Nothing saved yet. Star an opportunity to move it here.', true);
   paint('listB', binned, 'The bin is empty.');
 
   // admin buckets
   const dropped = live.filter(r=>['dropped','expired'].includes(r.status||''));
+  const keptAll = live.filter(isKept);   // Admin shows everything, starred included
   const gate    = live.filter(r=>['no-keyword','empty','error'].includes(r.status||''));
-  document.getElementById('cKept').textContent    = real.length;
+  document.getElementById('cKept').textContent    = keptAll.length;
   document.getElementById('cDropped').textContent = dropped.length;
   document.getElementById('cGate').textContent    = gate.length;
-  ADMIN_BUCKETS = { kept: real, dropped: dropped, gate: gate };
+  ADMIN_BUCKETS = { kept: keptAll, dropped: dropped, gate: gate };
   renderAdminList();
 }
 
@@ -607,18 +609,23 @@ function setBadge(id,n){
   el.classList.toggle('hide', !n);
 }
 
-function paint(elId, items, emptyText){
+function paint(elId, items, emptyText, clean){
   const el = document.getElementById(elId);
   if(!items.length){ el.innerHTML = '<div class="empty-state">'+esc(emptyText)+'</div>'; return; }
-  el.innerHTML = items.map(card).join('');
+  el.innerHTML = items.map(t=>card(t, {clean: !!clean})).join('');
 }
 
-function card(t){
+function card(t, opts){
+  const clean = !!(opts && opts.clean);   // Opportunities/Saved: show only what matters
   const st = t.status || (t.relevant?'kept':'dropped');
   const label = LABEL[st] || st;
   const colour = COLOUR[st] || 'var(--dropped)';
   const inBin = !!t.deletedAt;
   const unread = !inBin && !t.opened;
+
+  // Prefer the regulator and country the AI worked out; fall back to a
+  // tidied-up version of the watch title if it is not there.
+  const where = t.issuer || tidySource(t.source);
 
   let actions;
   if(inBin){
@@ -638,6 +645,16 @@ function card(t){
       '</div>';
   }
 
+  // Metadata line. Clean view drops the status label and the arrival timestamp.
+  const bits = [];
+  if(!clean) bits.push('<span class="tag" style="color:'+colour+'">'+esc(label)+'</span>');
+  if(where) bits.push(esc(where));
+  if(t.category) bits.push(esc(t.category));
+  if(t.deadline) bits.push('closes '+esc(t.deadline));
+  if(t.language && String(t.language).toLowerCase()!=='english')
+    bits.push('<span class="langtag">translated from '+esc(t.language)+'</span>');
+  if(!clean && t.savedAt) bits.push(esc(new Date(t.savedAt).toLocaleString()));
+
   return '<div class="rec'+(unread?' unread':'')+'" style="border-left-color:'+colour+'"'+
     (unread?' onclick="act(event,\''+t.id+'\',\'open\')"':'')+'>'+
     '<div class="top"><span class="title">'+
@@ -648,17 +665,24 @@ function card(t){
       '<span class="typetag '+esc(TYPE_CLASS[t.type]||'unknown')+'">'+esc(TYPE_LABEL[t.type]||'Uncategorised')+'</span>'+
       '<span class="typedesc">'+esc(TYPE_DESC[t.type]||'')+'</span>'+
       '</div>'+
-    '<div class="meta"><span class="tag" style="color:'+colour+'">'+esc(label)+'</span> · '+
-      esc(t.source||'unknown source')+
-      (t.language && t.language.toLowerCase()!=='english' ? ' · <span class="langtag">translated from '+esc(t.language)+'</span>' : '')+
-      (t.category?' · '+esc(t.category):'')+
-      (t.deadline?' · closes '+esc(t.deadline):'')+
-      (t.savedAt?' · '+esc(new Date(t.savedAt).toLocaleString()):'')+'</div>'+
+    (bits.length?'<div class="meta">'+bits.join(' · ')+'</div>':'')+
     (t.rationale?'<div class="why">'+esc(t.rationale)+'</div>':'')+
-    (t.preview?'<div class="raw">'+esc(t.preview)+'</div>':'')+
+    // The raw text from the change detector is debugging detail: Admin only.
+    (!clean && t.preview?'<div class="raw">'+esc(t.preview)+'</div>':'')+
     (t.url?'<a href="'+esc(t.url)+'" target="_blank" rel="noreferrer" onclick="event.stopPropagation()">Open the source page</a>':'')+
     actions+
     '</div>';
+}
+
+// Turns a watch title like "Public Notice | TCRA" or
+// "Call for Research Proposals – Uganda Communications Commission"
+// into just the organisation, as a fallback when the AI gave no issuer.
+function tidySource(src){
+  let s = String(src||'').trim();
+  if(!s) return '';
+  const parts = s.split(/\s[|\u2013\u2014-]\s/).map(x=>x.trim()).filter(Boolean);
+  if(parts.length > 1) s = parts[parts.length-1];
+  return s.replace(/\s+/g,' ').slice(0, 60);
 }
 
 /* optimistic update, then persist */
