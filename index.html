@@ -198,6 +198,15 @@
   .typetag.unknown{background:#EEF1F4; color:#5A6675}
   .typedesc{font-size:12px; color:var(--ink-soft); margin-left:9px}
   .langtag{background:#EEF3F9; color:var(--brand); border-radius:4px; padding:1px 6px; font-weight:600; font-size:11.5px}
+  .selbar{
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    padding:11px 14px; border:1px solid var(--line); border-radius:8px;
+    background:var(--surface); margin-bottom:14px;
+  }
+  .selbar .count{font-size:13.5px; font-weight:600}
+  .selbar .spacer{flex:1}
+  .rec .pick{margin-right:9px; accent-color:var(--brand); width:auto}
+  .rec.picked{background:#F4F8FC; border-color:#CBDDEE}
   .binmeta{font-size:12px; color:var(--empty); font-weight:600; margin-top:8px}
 
   @media (max-width:760px){
@@ -366,6 +375,18 @@
       <button class="subtab" onclick="showAdmin('gate')"    id="stGate">Never judged <span id="cGate">0</span></button>
     </div>
     <p class="note" id="adminNote"></p>
+
+    <div class="selbar">
+      <label class="check" style="font-weight:500">
+        <input type="checkbox" id="pickAll" onchange="toggleAll(this.checked)">
+        <span>Select all shown</span>
+      </label>
+      <span class="count" id="pickCount">Nothing selected</span>
+      <span class="spacer"></span>
+      <button class="ghost" onclick="binSelected()">Move selected to bin</button>
+      <button class="ghost" onclick="binAllShown()">Move all shown to bin</button>
+    </div>
+
     <div id="listA"><p class="msg">Loading…</p></div>
   </section>
 
@@ -595,6 +616,7 @@ function showAdmin(which){
 
 function renderAdminList(){
   document.getElementById('adminNote').textContent = ADMIN_NOTE[ADMIN_VIEW] || '';
+  setTimeout(updatePickBar, 0);
   const empty = {
     kept:'Nothing has passed the threshold yet.',
     dropped:'Nothing has been judged and rejected yet.',
@@ -655,9 +677,11 @@ function card(t, opts){
     bits.push('<span class="langtag">translated from '+esc(t.language)+'</span>');
   if(!clean && t.savedAt) bits.push(esc(new Date(t.savedAt).toLocaleString()));
 
-  return '<div class="rec'+(unread?' unread':'')+'" style="border-left-color:'+colour+'"'+
+  return '<div class="rec'+(unread?' unread':'')+(PICKED.has(t.id)?' picked':'')+'" style="border-left-color:'+colour+'"'+
     (unread?' onclick="act(event,\''+t.id+'\',\'open\')"':'')+'>'+
     '<div class="top"><span class="title">'+
+      (!clean && !inBin ? '<input type="checkbox" class="pick" data-id="'+esc(t.id)+'"'+
+        (PICKED.has(t.id)?' checked':'')+' onclick="event.stopPropagation();togglePick(\''+t.id+'\',this.checked)">' : '')+
       (unread?'<span class="dot" style="display:inline-block;margin-right:7px"></span>':'')+
       esc(t.title||'Untitled')+'</span>'+
     (t.score!=null?'<span class="score">'+esc(t.score)+'</span>':'')+'</div>'+
@@ -718,6 +742,68 @@ async function emptyBin(){
   RECORDS = RECORDS.filter(r=>!r.deletedAt);
   renderAll();
   try{ await fetch('/api/tenders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'emptyBin'})}); }catch(e){ loadRecords(); }
+}
+
+/* ---------------- bulk selection (admin) ---------------- */
+const PICKED = new Set();
+
+function togglePick(id, on){
+  if(on) PICKED.add(id); else PICKED.delete(id);
+  updatePickBar();
+  const row = document.querySelector('.pick[data-id="'+CSS.escape(id)+'"]');
+  if(row) row.closest('.rec').classList.toggle('picked', on);
+}
+
+function shownIds(){
+  return (ADMIN_BUCKETS[ADMIN_VIEW] || []).filter(r=>!r.deletedAt).map(r=>r.id);
+}
+
+function toggleAll(on){
+  const ids = shownIds();
+  ids.forEach(id => on ? PICKED.add(id) : PICKED.delete(id));
+  renderAdminList();
+  updatePickBar();
+}
+
+function updatePickBar(){
+  const n = PICKED.size;
+  const el = document.getElementById('pickCount');
+  if(el) el.textContent = n ? (n + ' selected') : 'Nothing selected';
+  const all = document.getElementById('pickAll');
+  if(all){
+    const ids = shownIds();
+    all.checked = ids.length > 0 && ids.every(id => PICKED.has(id));
+  }
+}
+
+async function sendBulk(ids, label){
+  if(!ids.length) return;
+  // Update the screen immediately, then persist.
+  const stamp = new Date().toISOString();
+  RECORDS.forEach(r => { if(ids.includes(r.id)) r.deletedAt = stamp; });
+  PICKED.clear();
+  renderAll();
+  updatePickBar();
+  try{
+    await fetch('/api/tenders',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'binMany', ids})
+    });
+  }catch(e){ loadRecords(); }
+}
+
+function binSelected(){
+  const ids = [...PICKED];
+  if(!ids.length) return alert('Select some items first.');
+  if(!confirm('Move '+ids.length+' item'+(ids.length===1?'':'s')+' to the bin? They will not come back if the same notice appears again.')) return;
+  sendBulk(ids);
+}
+
+function binAllShown(){
+  const ids = shownIds();
+  if(!ids.length) return alert('There is nothing to move.');
+  if(!confirm('Move all '+ids.length+' shown item'+(ids.length===1?'':'s')+' to the bin?')) return;
+  sendBulk(ids);
 }
 
 /* ---------------- analytics ---------------- */
@@ -882,3 +968,4 @@ loadRecords();
 </script>
 </body>
 </html>
+
