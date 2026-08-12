@@ -79,6 +79,29 @@ export default async function handler(req, res) {
     const { action, id } = body;
 
     try {
+      // Bin several at once.
+      if (action === 'binMany' || action === 'deleteMany') {
+        const ids = Array.isArray(body.ids) ? body.ids.slice(0, 500) : [];
+        let done = 0;
+        for (const one of ids) {
+          try {
+            const rec = parse(await redis(['HGET', HASH, one]));
+            if (!rec) continue;
+            rec.id = rec.id || one;
+            if (action === 'deleteMany') {
+              await suppress(rec, true);
+              await redis(['HDEL', HASH, one]);
+            } else {
+              rec.deletedAt = new Date().toISOString();
+              await suppress(rec, true);
+              await redis(['HSET', HASH, one, JSON.stringify(rec)]);
+            }
+            done++;
+          } catch (e) { /* skip the ones that fail */ }
+        }
+        return res.status(200).json({ ok: true, count: done });
+      }
+
       if (action === 'emptyBin') {
         const all = hashToRecords(await redis(['HGETALL', HASH]));
         for (const r of all) if (r.deletedAt) await redis(['HDEL', HASH, r.id]);
