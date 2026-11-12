@@ -167,12 +167,107 @@ function tenderToText(t) {
   return parts.join('\n');
 }
 
+// ---------------------------------------------------------------------------
+// TendersInfo parsing
+// ---------------------------------------------------------------------------
+
+// A TendersInfo alert opens with a summary list, then a "Tender Details" section
+// where each tender looks like:
+//
+//   12. Japan -Consulting services for the current assessment of ...<https://tendersinfo.net/TenderDetail/Tenderinformation?tenderNo=104460235&...>
+//   Ref 102063427
+//   Org City Of Stratford
+//   Country Canada
+//   Tender Value Refer Document
+//   Notice No rft-2026-18
+//   Source Link<https://original-notice-site/...>
+//   Deadline 25-11-2026
+//   Description Tenders Are Invited For ...
+//   [Go Top]
+//
+// The summary list repeats the titles without links, so it is ignored.
+
+export function isTendersInfoEmail({ from = '', subject = '', text = '' } = {}) {
+  const f = String(from).toLowerCase();
+  const s = String(subject).toLowerCase();
+  if (f.includes('tendersinfo')) return true;
+  if (/tenders of your category|tendersinfo/.test(s)) return true;
+  return /tendersinfo\.net\/TenderDetail/i.test(text);
+}
+
+const TI_FIELDS = ['Ref', 'Org', 'Address', 'Country', 'Bid Type', 'Location', 'Tender Value', 'Emd', 'Notice No', 'Deadline'];
+
+export function parseTendersInfo(raw) {
+  const lines = String(raw || '').replace(/\r/g, '').split('\n').map((l) => l.trim());
+  const starts = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^\d+\.\s*(.*?)\s*<?(https?:\/\/(?:www\.)?tendersinfo\.net\/TenderDetail\/[^\s>]*)>?\s*$/i);
+    if (m) starts.push({ i, title: m[1].trim(), link: m[2] });
+  }
+
+  const tenders = [];
+  const seen = new Set();
+  for (let k = 0; k < starts.length; k++) {
+    const { i, title, link } = starts[k];
+    const end = k + 1 < starts.length ? starts[k + 1].i : lines.length;
+    const idm = link.match(/tenderNo=(\d+)/i);
+    const id = idm ? idm[1] : '';
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+
+    const t = { id, title };
+    let inDesc = false;
+    const desc = [];
+    for (const line of lines.slice(i + 1, end)) {
+      if (/^\[go top\]/i.test(line)) break;
+      if (inDesc) { if (line) desc.push(line); continue; }
+      const src = line.match(/^Source Link\s*<([^>]*)>?/i);
+      if (src) { t.sourceUrl = src[1].trim(); continue; }
+      if (/^Docs\b/i.test(line)) continue;
+      const dm = line.match(/^Description\s*(.*)$/i);
+      if (dm) { inDesc = true; if (dm[1]) desc.push(dm[1]); continue; }
+      for (const f of TI_FIELDS) {
+        const fm = line.match(new RegExp('^' + f + '\\b\\s*(.*)$', 'i'));
+        if (fm) { if (fm[1].trim() && !t[f]) t[f] = fm[1].trim(); break; }
+      }
+    }
+    // Some fields carry translation-service debris; drop it.
+    for (const f of TI_FIELDS) if (t[f] && /Detected_Language|Translated_Text/.test(t[f])) delete t[f];
+    t.description = desc.join(' ').replace(/\s+/g, ' ').replace(/\{[^}]*Detected_Language[^}]*\}/g, '').trim();
+    tenders.push(t);
+  }
+  return tenders;
+}
+
+function tendersInfoToText(t) {
+  const parts = [t.title];
+  if (t.Org) parts.push('Organisation: ' + t.Org);
+  if (t.Country) parts.push('Country: ' + t.Country);
+  if (t['Tender Value'] && !/refer document/i.test(t['Tender Value'])) parts.push('Value: ' + t['Tender Value']);
+  if (t.Ref) parts.push('Reference: ' + t.Ref);
+  if (t.Deadline) parts.push('Deadline: ' + t.Deadline);
+  if (t.description) parts.push('Description: ' + t.description);
+  parts.push(
+    'Note: this is a short summary from an alert email, and the description may be cut off. ' +
+    'Judge on what is shown. If it is vague but the subject area could fit, say so in the rationale rather than scoring it zero.'
+  );
+  return parts.join('\n');
+}
+
 // A deadline already in the past is dropped here, before it costs a judge call.
+// Understands "26 Oct, 2026" (DevelopmentAid) and "25-11-2026" (TendersInfo).
+const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
 function parseDeadline(s) {
-  const m = String(s || '').match(/(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})/);
-  if (!m) return null;
-  const d = new Date(m[1] + ' ' + m[2] + ' ' + m[3] + ' 23:59:59 UTC');
-  return isNaN(d) ? null : d;
+  const str = String(s || '');
+  let m = str.match(/(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})/);
+  if (m) {
+    const mon = MONTHS[m[2].slice(0, 3).toLowerCase()];
+    if (mon === undefined) return null;
+    return new Date(Date.UTC(+m[3], mon, +m[1], 23, 59, 59));
+  }
+  m = str.match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/);
+  if (m) return new Date(Date.UTC(+m[3], +m[2] - 1, +m[1], 23, 59, 59));
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -214,9 +309,12 @@ export default async function handler(req, res) {
         body: JSON.stringify(payload),
       }).then((r) => r.json().catch(() => ({})));
 
-    // --- DevelopmentAid alert: one judged item per tender ---
-    if (isDevAidEmail({ from, subject, text: content })) {
-      const tenders = parseDevAid(content);
+    // --- Tender alert (DevelopmentAid or TendersInfo): one judged item per tender ---
+    const isTI = isTendersInfoEmail({ from, subject, text: content });
+    const isDA = !isTI && isDevAidEmail({ from, subject, text: content });
+    if (isTI || isDA) {
+      const provider = isTI ? 'TendersInfo' : 'DevelopmentAid';
+      const tenders = isTI ? parseTendersInfo(content) : parseDevAid(content);
       const start = Math.max(0, parseInt(body.start, 10) || 0);
       // An email can hold 180+ tenders, and a serverless call is time-limited, so the
       // caller works through it in chunks: send the same email again with start=next.
@@ -226,31 +324,32 @@ export default async function handler(req, res) {
         // The format may have changed. Say so loudly rather than silently losing tenders.
         if (start === 0) {
           await send({
-            source: 'DevelopmentAid (parser)',
+            source: provider + ' (parser)',
             url: '',
-            changed_text: 'PARSER WARNING: a DevelopmentAid email arrived but no tenders could be read from it. ' +
+            changed_text: 'PARSER WARNING: a ' + provider + ' email arrived but no tenders could be read from it. ' +
               'The email format may have changed. Subject: ' + subject,
           });
         }
-        return res.status(200).json({ received: true, kind: 'developmentaid', total: 0, next: null, warning: 'no tenders parsed' });
+        return res.status(200).json({ received: true, kind: provider.toLowerCase(), total: 0, next: null, warning: 'no tenders parsed' });
       }
 
       const now = new Date();
       const chunk = tenders.slice(start, start + limit);
       const outcomes = await Promise.all(chunk.map(async (t) => {
-        const dl = parseDeadline(t.Deadline);
+        const dl = parseDeadline(isTI ? t.Deadline : t.Deadline);
         if (dl && dl < now) return { id: t.id, expired: true };
         const r = await send({
-          source: 'DevelopmentAid',
-          url: t.url,
-          changed_text: tenderToText(t),
+          source: provider,
+          // TendersInfo links to the original notice, which is free to read.
+          url: isTI ? (t.sourceUrl || '') : t.url,
+          changed_text: isTI ? tendersInfoToText(t) : tenderToText(t),
         });
         return { id: t.id, skipped: !!r.skipped, reason: r.reason || '', score: r.verdict ? r.verdict.score : undefined };
       }));
 
       const nextStart = start + chunk.length;
       return res.status(200).json({
-        received: true, kind: 'developmentaid',
+        received: true, kind: provider.toLowerCase(),
         total: tenders.length, start, processed: chunk.length,
         expired: outcomes.filter((o) => o.expired).length,
         next: nextStart < tenders.length ? nextStart : null,
