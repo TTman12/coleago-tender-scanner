@@ -1,9 +1,12 @@
-// EMAIL IN. For regulators that cannot be watched by the change detector but do
-// send a newsletter or tender alert. Forward those emails here and they flow
-// through the same judge, dashboard and digest as everything else.
+// EMAIL IN. Emails arrive here (from the intake inbox script, or any inbound-email
+// service that posts JSON) and flow through the same judge, dashboard and digest
+// as everything else.
 //
-// Works with any inbound-email service that posts JSON (Cloudflare Email
-// Workers, Mailgun Routes, SendGrid Inbound Parse, Zapier, Make, Postmark).
+// Two kinds of email:
+//   1. DevelopmentAid tender alerts. One email holds many tenders, so it is split
+//      into one item per tender and each is judged on its own.
+//   2. Anything else (regulator newsletters etc). Sent through whole, as before.
+//
 // Self-contained on purpose: no imports.
 
 function strip(html) {
@@ -41,6 +44,139 @@ function tidy(text) {
     .trim();
 }
 
+// ---------------------------------------------------------------------------
+// DevelopmentAid parsing
+// ---------------------------------------------------------------------------
+
+// A DevelopmentAid alert is a list of blocks like:
+//
+//   Title of the tender <https://www.developmentaid.org/tenders/view/1714487/slug?utm...>
+//   new            (or "updated")
+//   Funding agency: ...
+//   Location: ...
+//   Sectors: ...
+//   Category: ...        (older emails say "Contract type:")
+//   Budget: ...
+//   Deadline: ...
+//
+// The fields may sit on one line ("Funding agency: X") or the label may be on its
+// own line with the value on the next, depending on how the email was forwarded.
+
+export function isDevAidEmail({ from = '', subject = '', text = '' } = {}) {
+  const f = String(from).toLowerCase();
+  const s = String(subject).toLowerCase();
+  if (f.includes('developmentaid')) return true;
+  if (/funding opportunit(y|ies) from developmentaid/.test(s)) return true;
+  // Forwarded by a person: the original sender is quoted in the body.
+  return /from:\s*developmentaid/i.test(text) || /developmentaid\.org\/tenders\/view\//i.test(text);
+}
+
+// Removes tracking parameters (they identify the recipient) and keeps the plain
+// tender address, which also gives a stable id.
+function cleanTenderUrl(u) {
+  const m = String(u || '').match(/https?:\/\/(?:www\.)?developmentaid\.org\/tenders\/view\/(\d+)(?:\/([\w-]+))?/i);
+  if (!m) return { url: '', id: '' };
+  return {
+    id: m[1],
+    url: 'https://www.developmentaid.org/tenders/view/' + m[1] + (m[2] ? '/' + m[2] : ''),
+  };
+}
+
+const LABELS = ['Funding agency', 'Location', 'Sectors', 'Category', 'Contract type', 'Budget', 'Deadline'];
+
+export function parseDevAid(raw) {
+  // Work from the plain text. Put each link on its own line after the title.
+  const text = String(raw || '').replace(/\r/g, '');
+  const lines = text.split('\n').map((l) => l.trim());
+
+  // Find every tender title: a line that carries a link to /tenders/view/<id>.
+  // (Text and link may be on one line, as "Title <url>", or the link may be alone.)
+  const starts = [];
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    const m = l.match(/(.*?)\s*<?\s*(https?:\/\/(?:www\.)?developmentaid\.org\/tenders\/view\/\d+[^\s>]*)\s*>?/i);
+    if (!m) continue;
+    let title = m[1].trim();
+    // If the link stands alone, the title is the nearest non-empty line above.
+    if (!title) {
+      for (let j = i - 1; j >= 0 && j >= i - 3; j--) {
+        if (lines[j] && !/^(new|updated|open)$/i.test(lines[j])) { title = lines[j]; break; }
+      }
+    }
+    starts.push({ i, title, link: m[2] });
+  }
+
+  const tenders = [];
+  const seenIds = new Set();
+  for (let k = 0; k < starts.length; k++) {
+    const { i, title, link } = starts[k];
+    const end = k + 1 < starts.length ? starts[k + 1].i : lines.length;
+    const block = lines.slice(i + 1, end);
+
+    const { id, url } = cleanTenderUrl(link);
+    if (!id || seenIds.has(id)) continue;
+    seenIds.add(id);
+
+    const fields = {};
+    let status = '';
+    for (let b = 0; b < block.length; b++) {
+      const line = block[b];
+      if (!status && /^(new|updated)$/i.test(line)) { status = line.toLowerCase(); continue; }
+      for (const label of LABELS) {
+        const re = new RegExp('^' + label + '\\s*:\\s*(.*)$', 'i');
+        const lm = line.match(re);
+        if (!lm) continue;
+        let val = lm[1].trim();
+        if (!val) {
+          // value is on the next non-empty line
+          for (let n = b + 1; n < block.length; n++) {
+            if (block[n]) { val = block[n]; break; }
+          }
+        }
+        // drop a trailing link
+        val = val.replace(/\s*<https?:[^>]*>?/g, '').trim();
+        const key = label === 'Contract type' ? 'Category' : label;
+        if (val && !fields[key]) fields[key] = val;
+        break;
+      }
+    }
+
+    // A block with no fields is not a tender (e.g. a banner link).
+    if (!fields['Funding agency'] && !fields.Deadline && !fields.Location) continue;
+
+    tenders.push({ id, url, title, status, ...fields });
+  }
+  return tenders;
+}
+
+// Turns one parsed tender into the text the judge reads.
+function tenderToText(t) {
+  const parts = [t.title];
+  if (t.status) parts.push('Status: ' + t.status);
+  if (t['Funding agency']) parts.push('Funding agency: ' + t['Funding agency']);
+  if (t.Location) parts.push('Location: ' + t.Location);
+  if (t.Sectors) parts.push('Sectors: ' + t.Sectors);
+  if (t.Category) parts.push('Category: ' + t.Category);
+  if (t.Budget) parts.push('Budget: ' + t.Budget);
+  if (t.Deadline) parts.push('Deadline: ' + t.Deadline);
+  parts.push(
+    'Note: this is a headline summary from a DevelopmentAid alert email. Only the details above are available; ' +
+    'the full notice is behind a login. Judge on what is shown. If the title is vague but the sector, ' +
+    'country or funder could fit, say so in the rationale rather than scoring it zero.'
+  );
+  return parts.join('\n');
+}
+
+// A deadline already in the past is dropped here, before it costs a judge call.
+function parseDeadline(s) {
+  const m = String(s || '').match(/(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})/);
+  if (!m) return null;
+  const d = new Date(m[1] + ' ' + m[2] + ' ' + m[3] + ' 23:59:59 UTC');
+  return isNaN(d) ? null : d;
+}
+
+// ---------------------------------------------------------------------------
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST' });
 
@@ -69,8 +205,61 @@ export default async function handler(req, res) {
 
     let content = String(rawText || '').trim();
     if (!content && rawHtml) content = strip(rawHtml);
-    content = tidy(content);
 
+    const host = req.headers.host ? 'https://' + req.headers.host : (process.env.APP_URL || '');
+    const send = (payload) =>
+      fetch(host + '/api/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + secret },
+        body: JSON.stringify(payload),
+      }).then((r) => r.json().catch(() => ({})));
+
+    // --- DevelopmentAid alert: one judged item per tender ---
+    if (isDevAidEmail({ from, subject, text: content })) {
+      const tenders = parseDevAid(content);
+      const start = Math.max(0, parseInt(body.start, 10) || 0);
+      // An email can hold 180+ tenders, and a serverless call is time-limited, so the
+      // caller works through it in chunks: send the same email again with start=next.
+      const limit = Math.min(20, Math.max(1, parseInt(body.limit, 10) || 8));
+
+      if (tenders.length === 0) {
+        // The format may have changed. Say so loudly rather than silently losing tenders.
+        if (start === 0) {
+          await send({
+            source: 'DevelopmentAid (parser)',
+            url: '',
+            changed_text: 'PARSER WARNING: a DevelopmentAid email arrived but no tenders could be read from it. ' +
+              'The email format may have changed. Subject: ' + subject,
+          });
+        }
+        return res.status(200).json({ received: true, kind: 'developmentaid', total: 0, next: null, warning: 'no tenders parsed' });
+      }
+
+      const now = new Date();
+      const chunk = tenders.slice(start, start + limit);
+      const outcomes = await Promise.all(chunk.map(async (t) => {
+        const dl = parseDeadline(t.Deadline);
+        if (dl && dl < now) return { id: t.id, expired: true };
+        const r = await send({
+          source: 'DevelopmentAid',
+          url: t.url,
+          changed_text: tenderToText(t),
+        });
+        return { id: t.id, skipped: !!r.skipped, reason: r.reason || '', score: r.verdict ? r.verdict.score : undefined };
+      }));
+
+      const nextStart = start + chunk.length;
+      return res.status(200).json({
+        received: true, kind: 'developmentaid',
+        total: tenders.length, start, processed: chunk.length,
+        expired: outcomes.filter((o) => o.expired).length,
+        next: nextStart < tenders.length ? nextStart : null,
+        results: outcomes,
+      });
+    }
+
+    // --- Anything else: the whole email, as before ---
+    content = tidy(content);
     if (!content && !subject) {
       return res.status(200).json({ skipped: true, reason: 'nothing in the email' });
     }
@@ -80,21 +269,13 @@ export default async function handler(req, res) {
     const domain = (String(from).match(/@([\w.-]+)/) || [])[1] || '';
     const source = (senderName || domain || 'Email') + (domain && senderName ? ' (' + domain + ')' : '');
 
-    // Hand straight to the normal pipeline. Subject first: it usually carries
-    // the headline, and the judge reads from the top.
+    // Subject first: it usually carries the headline, and the judge reads from the top.
     const changed_text = (subject ? subject + '\n\n' : '') + content;
-
-    const host = req.headers.host ? 'https://' + req.headers.host : (process.env.APP_URL || '');
-    const r = await fetch(host + '/api/ingest', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + secret },
-      body: JSON.stringify({
-        source: 'Newsletter: ' + source,
-        url: body.url || '',
-        changed_text,
-      }),
+    const result = await send({
+      source: 'Newsletter: ' + source,
+      url: body.url || '',
+      changed_text,
     });
-    const result = await r.json().catch(() => ({}));
 
     return res.status(200).json({ received: true, source, chars: changed_text.length, result });
   } catch (e) {
