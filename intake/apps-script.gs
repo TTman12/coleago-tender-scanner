@@ -2,7 +2,7 @@
  * COLEAGO INTAKE: Gmail -> dashboard
  *
  * Lives inside the intake Gmail account (script.google.com while signed in as the
- * intake address). Every few minutes it finds new DevelopmentAid emails, sends each to
+ * intake address). Every few minutes it finds new DevelopmentAid and TendersInfo emails, sends each to
  * the dashboard's /api/email-in, and labels it "processed" so it is never sent twice.
  *
  * SETUP (once):
@@ -25,7 +25,7 @@ function processDevAidEmails() {
   if (!appUrl || !secret) throw new Error('Set APP_URL and INGEST_SECRET in Script properties.');
 
   var label = GmailApp.getUserLabelByName(PROCESSED_LABEL) || GmailApp.createLabel(PROCESSED_LABEL);
-  var threads = GmailApp.search('developmentaid -label:' + PROCESSED_LABEL + ' newer_than:14d', 0, 20);
+  var threads = GmailApp.search('(developmentaid OR tendersinfo) -label:' + PROCESSED_LABEL + ' newer_than:14d', 0, 20);
 
   threads.forEach(function (thread) {
     var allOk = true;
