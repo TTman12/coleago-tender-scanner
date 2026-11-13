@@ -271,6 +271,31 @@ function parseDeadline(s) {
 }
 
 // ---------------------------------------------------------------------------
+// Fallback for email formats we have no parser for
+// ---------------------------------------------------------------------------
+
+// The judge reads one item at a time and only the first few thousand characters, so a
+// long email from an unfamiliar tender service is cut into pieces and every piece is
+// judged. Pieces break on blank lines, which is where tender listings usually separate.
+export function splitIntoChunks(text, max = 1800, cap = 60) {
+  const paras = String(text || '').split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const chunks = [];
+  let cur = '';
+  const push = () => { if (cur.trim()) chunks.push(cur.trim()); cur = ''; };
+  for (const p of paras) {
+    if (p.length > max) {
+      push();
+      for (let i = 0; i < p.length; i += max) chunks.push(p.slice(i, i + max));
+      continue;
+    }
+    if (cur && (cur.length + p.length + 2) > max) push();
+    cur += (cur ? '\n\n' : '') + p;
+  }
+  push();
+  return chunks.slice(0, cap);
+}
+
+// ---------------------------------------------------------------------------
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST' });
@@ -357,7 +382,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // --- Anything else: the whole email, as before ---
+    // --- Any other email: still judged, in pieces, so nothing is cut off ---
     content = tidy(content);
     if (!content && !subject) {
       return res.status(200).json({ skipped: true, reason: 'nothing in the email' });
@@ -368,15 +393,32 @@ export default async function handler(req, res) {
     const domain = (String(from).match(/@([\w.-]+)/) || [])[1] || '';
     const source = (senderName || domain || 'Email') + (domain && senderName ? ' (' + domain + ')' : '');
 
-    // Subject first: it usually carries the headline, and the judge reads from the top.
-    const changed_text = (subject ? subject + '\n\n' : '') + content;
-    const result = await send({
-      source: 'Newsletter: ' + source,
-      url: body.url || '',
-      changed_text,
-    });
+    const chunks = splitIntoChunks((subject ? subject + '\n\n' : '') + content);
+    const start = Math.max(0, parseInt(body.start, 10) || 0);
+    const limit = Math.min(20, Math.max(1, parseInt(body.limit, 10) || 8));
+    const slice = chunks.slice(start, start + limit);
 
-    return res.status(200).json({ received: true, source, chars: changed_text.length, result });
+    // First piece only: flag that this layout has no dedicated parser yet.
+    if (start === 0 && chunks.length > 1) {
+      console.log('EMAIL-IN unrecognised layout, judged in ' + chunks.length + ' pieces |', source, '|', subject);
+    }
+
+    const outcomes = await Promise.all(slice.map(async (piece, idx) => {
+      const r = await send({
+        source: 'Tender email: ' + source,
+        url: body.url || '',
+        changed_text: (chunks.length > 1 ? '[Part ' + (start + idx + 1) + ' of ' + chunks.length + ' of an email titled "' + subject + '"]\n\n' : '') + piece,
+      });
+      return { skipped: !!r.skipped, reason: r.reason || '', score: r.verdict ? r.verdict.score : undefined };
+    }));
+
+    const nextStart = start + slice.length;
+    return res.status(200).json({
+      received: true, kind: 'other', source,
+      total: chunks.length, start, processed: slice.length,
+      next: nextStart < chunks.length ? nextStart : null,
+      results: outcomes,
+    });
   } catch (e) {
     // Inbound mail services retry on errors, so always answer 200.
     return res.status(200).json({ skipped: true, reason: 'email-in error', detail: String(e.message || e) });
