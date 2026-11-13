@@ -2,7 +2,7 @@
  * COLEAGO INTAKE: Gmail -> dashboard
  *
  * Lives inside the intake Gmail account (script.google.com while signed in as the
- * intake address). Every few minutes it finds new DevelopmentAid and TendersInfo emails, sends each to
+ * intake address). Every few minutes it finds new forwarded alert emails (DevelopmentAid, TendersInfo), sends each to
  * the dashboard's /api/email-in, and labels it "processed" so it is never sent twice.
  *
  * SETUP (once):
@@ -25,15 +25,24 @@ function processDevAidEmails() {
   if (!appUrl || !secret) throw new Error('Set APP_URL and INGEST_SECRET in Script properties.');
 
   var label = GmailApp.getUserLabelByName(PROCESSED_LABEL) || GmailApp.createLabel(PROCESSED_LABEL);
-  var threads = GmailApp.search('(developmentaid OR tendersinfo) -label:' + PROCESSED_LABEL + ' newer_than:14d', 0, 20);
+  // Everything that lands in this inbox is a forwarded alert, so no keyword filter:
+  // forwarded mail comes from the forwarder, not from DevelopmentAid/TendersInfo.
+  var threads = GmailApp.search('-label:' + PROCESSED_LABEL + ' newer_than:14d -in:trash -in:spam -in:drafts', 0, 20);
+  console.log('Found ' + threads.length + ' unprocessed thread(s).');
 
   threads.forEach(function (thread) {
     var allOk = true;
     thread.getMessages().forEach(function (msg) {
+      var subject = msg.getSubject() || '';
+      var from = msg.getFrom() || '';
       var body = msg.getPlainBody() || '';
-      // Skip bounce notices and empty messages.
-      if (!body || /^Undeliverable:/i.test(msg.getSubject())) return;
-      var ok = sendEmail_(appUrl, secret, msg.getSubject(), msg.getFrom(), body);
+      // Skip Google's own notices (e.g. forwarding confirmation), bounces and empty messages.
+      if (!body || /^Undeliverable:/i.test(subject) || /@(google|googlemail)\.com/i.test(from) && /forwarding|security alert/i.test(subject + body.slice(0, 300))) {
+        console.log('Skipped: ' + subject);
+        return;
+      }
+      var ok = sendEmail_(appUrl, secret, subject, from, body);
+      console.log((ok ? 'Sent: ' : 'FAILED: ') + subject);
       if (!ok) allOk = false;
     });
     // Only label when everything went through, so a failure is retried next time.
