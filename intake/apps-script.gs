@@ -37,6 +37,12 @@ function processDevAidEmails() {
       var from = msg.getFrom() || '';
       var body = msg.getPlainBody() || '';
       var html = msg.getBody() || '';
+      // Some alerts arrive with the real content inside an attachment (.eml / .html).
+      if (!body && !html) {
+        var fromAtt = readAttachments_(msg);
+        body = fromAtt.text; html = fromAtt.html;
+        console.log('  attachments: ' + fromAtt.info + ' -> plain ' + body.length + ', html ' + html.length);
+      }
       // Many alerts are HTML-only: no plain text at all. Only skip if there is neither.
       // Also skip Google's own notices (e.g. forwarding confirmation) and bounces.
       var isGoogleNotice = /@(google|googlemail)\.com/i.test(from) && /forwarding|security alert/i.test(subject + body.slice(0, 300));
@@ -93,4 +99,71 @@ function installTrigger() {
     if (t.getHandlerFunction() === 'processDevAidEmails') ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('processDevAidEmails').timeBased().everyMinutes(5).create();
+}
+
+
+// ---- Attachment reading ------------------------------------------------------
+function readAttachments_(msg) {
+  var out = { text: '', html: '', info: [] };
+  msg.getAttachments().forEach(function (att) {
+    var name = att.getName() || '', type = (att.getContentType() || '').toLowerCase();
+    out.info.push(name + ' (' + type + ', ' + att.getBytes().length + ' bytes)');
+    try {
+      if (/message\/rfc822/.test(type) || /\.eml$/i.test(name)) {
+        var r = parseMime_(att.getDataAsString());
+        out.text += r.text; out.html += r.html;
+      } else if (/text\/html/.test(type) || /\.html?$/i.test(name)) {
+        out.html += att.getDataAsString();
+      } else if (/text\/plain/.test(type) || /\.txt$/i.test(name)) {
+        out.text += att.getDataAsString();
+      }
+    } catch (e) { out.info.push('error reading ' + name + ': ' + e); }
+  });
+  out.info = out.info.join('; ');
+  return out;
+}
+
+function parseMime_(raw) {
+  var res = { text: '', html: '' };
+  var m = raw.match(/\r?\n\r?\n/);
+  var headEnd = m ? m.index : raw.length;
+  var head = raw.slice(0, headEnd).replace(/\r?\n[ \t]+/g, ' ');
+  var body = m ? raw.slice(headEnd + m[0].length) : '';
+  function hdr(n) { var h = head.match(new RegExp('^' + n + ':\\s*(.*)$', 'im')); return h ? h[1] : ''; }
+  var ctype = hdr('Content-Type') || 'text/plain';
+  var enc = hdr('Content-Transfer-Encoding').trim().toLowerCase();
+  var boundary = (ctype.match(/boundary="?([^";]+)"?/i) || [])[1];
+  if (/multipart\//i.test(ctype) && boundary) {
+    body.split('--' + boundary).forEach(function (part) {
+      if (/^\s*--\s*$/.test(part) || !part.trim()) return;
+      var sub = parseMime_(part.replace(/^\r?\n/, ''));
+      res.text += sub.text; res.html += sub.html;
+    });
+    return res;
+  }
+  if (/message\/rfc822/i.test(ctype)) return parseMime_(body);
+  var charset = (ctype.match(/charset="?([^";]+)"?/i) || [, 'UTF-8'])[1];
+  var decoded = decodeBody_(body, enc, charset);
+  if (/text\/html/i.test(ctype)) res.html = decoded;
+  else if (/text\/plain/i.test(ctype)) res.text = decoded;
+  return res;
+}
+
+function decodeBody_(body, enc, charset) {
+  try {
+    if (enc === 'base64') {
+      return Utilities.newBlob(Utilities.base64Decode(body.replace(/\s+/g, ''))).getDataAsString(charset);
+    }
+    if (enc === 'quoted-printable') {
+      var bytes = [];
+      var t = body.replace(/=\r?\n/g, '');
+      for (var i = 0; i < t.length; i++) {
+        var c = t.charAt(i);
+        if (c === '=' && /^[0-9A-Fa-f]{2}$/.test(t.substr(i + 1, 2))) { bytes.push(parseInt(t.substr(i + 1, 2), 16)); i += 2; }
+        else { var code = t.charCodeAt(i); if (code < 128) bytes.push(code); else Array.prototype.push.apply(bytes, Utilities.newBlob(c).getBytes()); }
+      }
+      return Utilities.newBlob(bytes).getDataAsString(charset);
+    }
+  } catch (e) { /* fall through to raw */ }
+  return body;
 }
