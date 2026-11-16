@@ -239,7 +239,7 @@ export function parseTendersInfo(raw) {
       const line = lines[j];
       if (/^\[go top\]/i.test(line)) break;
       if (inDesc) { if (line) desc.push(line); continue; }
-      const src = line.match(/^Source Link\b.*?(https?:\/\/[^\s<>]+)/i);
+      const src = line.match(/^Source Link.*?(https?:\/\/[^\s<>]+)/i);
       if (src) { t.sourceUrl = src[1].trim(); continue; }
       if (/^Docs\b/i.test(line)) continue;
       const dm = line.match(/^Description\s*(.*)$/i);
