@@ -36,12 +36,15 @@ function processDevAidEmails() {
       var subject = msg.getSubject() || '';
       var from = msg.getFrom() || '';
       var body = msg.getPlainBody() || '';
-      // Skip Google's own notices (e.g. forwarding confirmation), bounces and empty messages.
-      if (!body || /^Undeliverable:/i.test(subject) || /@(google|googlemail)\.com/i.test(from) && /forwarding|security alert/i.test(subject + body.slice(0, 300))) {
+      var html = msg.getBody() || '';
+      // Many alerts are HTML-only: no plain text at all. Only skip if there is neither.
+      // Also skip Google's own notices (e.g. forwarding confirmation) and bounces.
+      var isGoogleNotice = /@(google|googlemail)\.com/i.test(from) && /forwarding|security alert/i.test(subject + body.slice(0, 300));
+      if ((!body && !html) || /^Undeliverable:/i.test(subject) || isGoogleNotice) {
         console.log('Skipped: ' + subject);
         return;
       }
-      var ok = sendEmail_(appUrl, secret, subject, from, body, msg.getBody());
+      var ok = sendEmail_(appUrl, secret, subject, from, body, html);
       console.log((ok ? 'Sent: ' : 'FAILED: ') + subject);
       if (!ok) allOk = false;
     });
