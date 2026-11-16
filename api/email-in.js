@@ -27,6 +27,23 @@ function strip(html) {
     .trim();
 }
 
+
+// Like strip(), but keeps link addresses as "text <url>". The tender parsers find
+// tenders by their links, and a plain-text version of an HTML-only email often loses them.
+function htmlToText(html) {
+  // Links are written with temporary markers, because strip() removes anything in <...>.
+  const withLinks = String(html || '').replace(
+    /<a\b[^>]*?href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi,
+    (m, href, inner) => {
+      const label = inner.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      return (label ? label + ' ' : '') + '\u2039' + href.replace(/&amp;/gi, '&') + '\u203A';
+    }
+  );
+  return strip(withLinks).replace(/\u2039/g, '<').replace(/\u203A/g, '>');
+}
+
+const PROVIDER_LINK = /tendersinfo\.net\/TenderDetail|developmentaid\.org\/tenders\/view/i;
+
 // Newsletters carry a lot of boilerplate. Drop the obvious lines so the judge
 // reads the actual content rather than unsubscribe footers.
 function tidy(text) {
@@ -218,17 +235,27 @@ export function parseTendersInfo(raw) {
     const t = { id, title };
     let inDesc = false;
     const desc = [];
-    for (const line of lines.slice(i + 1, end)) {
+    for (let j = i + 1; j < end; j++) {
+      const line = lines[j];
       if (/^\[go top\]/i.test(line)) break;
       if (inDesc) { if (line) desc.push(line); continue; }
-      const src = line.match(/^Source Link\s*<([^>]*)>?/i);
+      const src = line.match(/^Source Link.*?(https?:\/\/[^\s<>]+)/i);
       if (src) { t.sourceUrl = src[1].trim(); continue; }
       if (/^Docs\b/i.test(line)) continue;
       const dm = line.match(/^Description\s*(.*)$/i);
       if (dm) { inDesc = true; if (dm[1]) desc.push(dm[1]); continue; }
       for (const f of TI_FIELDS) {
         const fm = line.match(new RegExp('^' + f + '\\b\\s*(.*)$', 'i'));
-        if (fm) { if (fm[1].trim() && !t[f]) t[f] = fm[1].trim(); break; }
+        if (!fm) continue;
+        let val = fm[1].trim();
+        if (!val) {
+          // The value may sit on the next line (HTML layouts). Don't swallow the next label.
+          const nxt = (lines[j + 1] || '').trim();
+          const isLabel = /^(Ref|Org|Address|Country|Bid Type|Location|Tender Value|Emd|Notice No|Source Link|Deadline|Docs|Description)\b/i.test(nxt);
+          if (nxt && !isLabel) val = nxt;
+        }
+        if (val && !t[f]) t[f] = val;
+        break;
       }
     }
     // Some fields carry translation-service debris; drop it.
@@ -324,7 +351,11 @@ export default async function handler(req, res) {
     const rawHtml = body.html || body['body-html'] || body.HtmlBody || '';
 
     let content = String(rawText || '').trim();
-    if (!content && rawHtml) content = strip(rawHtml);
+    if (rawHtml && !PROVIDER_LINK.test(content)) {
+      // The plain text has no tender links (common for HTML-only emails): read the HTML.
+      const fromHtml = htmlToText(rawHtml);
+      if (PROVIDER_LINK.test(fromHtml) || !content) content = fromHtml;
+    }
 
     const host = req.headers.host ? 'https://' + req.headers.host : (process.env.APP_URL || '');
     const send = (payload) =>
@@ -340,6 +371,7 @@ export default async function handler(req, res) {
     if (isTI || isDA) {
       const provider = isTI ? 'TendersInfo' : 'DevelopmentAid';
       const tenders = isTI ? parseTendersInfo(content) : parseDevAid(content);
+      if (!body.start) console.log('EMAIL-IN ' + provider + ' | tenders found: ' + tenders.length + ' | ' + subject);
       const start = Math.max(0, parseInt(body.start, 10) || 0);
       // An email can hold 180+ tenders, and a serverless call is time-limited, so the
       // caller works through it in chunks: send the same email again with start=next.

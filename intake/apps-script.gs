@@ -41,7 +41,7 @@ function processDevAidEmails() {
         console.log('Skipped: ' + subject);
         return;
       }
-      var ok = sendEmail_(appUrl, secret, subject, from, body);
+      var ok = sendEmail_(appUrl, secret, subject, from, body, msg.getBody());
       console.log((ok ? 'Sent: ' : 'FAILED: ') + subject);
       if (!ok) allOk = false;
     });
@@ -51,14 +51,14 @@ function processDevAidEmails() {
   });
 }
 
-function sendEmail_(appUrl, secret, subject, from, text) {
+function sendEmail_(appUrl, secret, subject, from, text, html) {
   var start = 0;
   for (var i = 0; i < MAX_CALLS; i++) {
     var res = UrlFetchApp.fetch(appUrl + '/api/email-in', {
       method: 'post',
       contentType: 'application/json',
       headers: { Authorization: 'Bearer ' + secret },
-      payload: JSON.stringify({ subject: subject, from: from, text: text, start: start, limit: CHUNK }),
+      payload: JSON.stringify({ subject: subject, from: from, text: text, html: html, start: start, limit: CHUNK }),
       muteHttpExceptions: true,
     });
     if (res.getResponseCode() !== 200) {
@@ -67,8 +67,19 @@ function sendEmail_(appUrl, secret, subject, from, text) {
     }
     var json = {};
     try { json = JSON.parse(res.getContentText()); } catch (e) { return false; }
-    // No "next" means that was the last chunk (or not a DevelopmentAid alert).
-    if (json.next === null || json.next === undefined) return true;
+    // Say exactly what the site did, so the Execution log is proof.
+    if (start === 0) {
+      console.log('  -> ' + (json.kind || 'unknown') + ': ' + (json.total !== undefined ? json.total + ' item(s) found' : 'no count') +
+        (json.warning ? ' | WARNING: ' + json.warning : '') + (json.reason ? ' | ' + json.reason : ''));
+    }
+    // A recognised alert with nothing readable in it means the layout is not understood.
+    // Do not mark it processed, so it is retried once the reader is fixed.
+    if (json.warning || json.reason === 'email-in error') return false;
+    // No "next" means that was the last chunk.
+    if (json.next === null || json.next === undefined) {
+      console.log('  -> done: ' + (json.expired || 0) + ' expired in the last batch');
+      return true;
+    }
     start = json.next;
   }
   return false;
