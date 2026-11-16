@@ -41,11 +41,11 @@ function processDevAidEmails() {
       // Also skip Google's own notices (e.g. forwarding confirmation) and bounces.
       var isGoogleNotice = /@(google|googlemail)\.com/i.test(from) && /forwarding|security alert/i.test(subject + body.slice(0, 300));
       if ((!body && !html) || /^Undeliverable:/i.test(subject) || isGoogleNotice) {
-        console.log('Skipped: ' + subject);
+        console.log('Skipped: ' + subject + '  [plain ' + body.length + ' chars, html ' + html.length + ' chars, from ' + from + ', attachments ' + msg.getAttachments().length + ']');
         return;
       }
       var ok = sendEmail_(appUrl, secret, subject, from, body, html);
-      console.log((ok ? 'Sent: ' : 'FAILED: ') + subject);
+      console.log((ok ? 'Sent: ' : 'FAILED: ') + subject + '  [plain ' + body.length + ' chars, html ' + html.length + ' chars]');
       if (!ok) allOk = false;
     });
     // Only label when everything went through, so a failure is retried next time.
