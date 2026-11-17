@@ -16,9 +16,14 @@
 
 var PROCESSED_LABEL = 'processed';
 var CHUNK = 8;          // tenders judged per call (an email can hold 180+)
-var MAX_CALLS = 40;     // safety stop per email
+var MAX_CALLS = 120;    // safety stop per email
+var TIME_BUDGET_MS = 4.5 * 60 * 1000; // Apps Script stops at 6 min; save progress before that
 
 function processDevAidEmails() {
+  var startedAt = Date.now();
+  // Stop a second run starting while a long one is still going.
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) { console.log('Another run is still working, skipping this one.'); return; }
   var props = PropertiesService.getScriptProperties();
   var appUrl = (props.getProperty('APP_URL') || '').replace(/\/$/, '');
   var secret = props.getProperty('INGEST_SECRET');
@@ -50,7 +55,7 @@ function processDevAidEmails() {
         console.log('Skipped: ' + subject + '  [plain ' + body.length + ' chars, html ' + html.length + ' chars, from ' + from + ', attachments ' + msg.getAttachments().length + ']');
         return;
       }
-      var ok = sendEmail_(appUrl, secret, subject, from, body, html);
+      var ok = sendEmail_(appUrl, secret, subject, from, body, html, msg.getId(), startedAt);
       console.log((ok ? 'Sent: ' : 'FAILED: ') + subject + '  [plain ' + body.length + ' chars, html ' + html.length + ' chars]');
       if (!ok) allOk = false;
     });
@@ -60,9 +65,17 @@ function processDevAidEmails() {
   });
 }
 
-function sendEmail_(appUrl, secret, subject, from, text, html) {
-  var start = 0;
+function sendEmail_(appUrl, secret, subject, from, text, html, msgId, startedAt) {
+  // Big alerts (100s of tenders) take several runs: remember how far we got.
+  var props = PropertiesService.getScriptProperties();
+  var key = 'progress_' + msgId;
+  var start = parseInt(props.getProperty(key) || '0', 10) || 0;
+  if (start) console.log('  resuming from tender ' + start);
   for (var i = 0; i < MAX_CALLS; i++) {
+    if (Date.now() - startedAt > TIME_BUDGET_MS) {
+      console.log('  time budget reached at tender ' + start + ', will continue on the next run');
+      return false;
+    }
     var res = UrlFetchApp.fetch(appUrl + '/api/email-in', {
       method: 'post',
       contentType: 'application/json',
@@ -87,9 +100,11 @@ function sendEmail_(appUrl, secret, subject, from, text, html) {
     // No "next" means that was the last chunk.
     if (json.next === null || json.next === undefined) {
       console.log('  -> done: ' + (json.expired || 0) + ' expired in the last batch');
+      props.deleteProperty(key);
       return true;
     }
     start = json.next;
+    props.setProperty(key, String(start));
   }
   return false;
 }
@@ -113,7 +128,8 @@ function readAttachments_(msg) {
         var r = parseMime_(att.getDataAsString());
         out.text += r.text; out.html += r.html;
       } else if (/text\/html/.test(type) || /\.html?$/i.test(name)) {
-        out.html += att.getDataAsString();
+        // The same file often comes attached twice; reading it twice doubles every tender.
+        if (!out.html) out.html = att.getDataAsString();
       } else if (/text\/plain/.test(type) || /\.txt$/i.test(name)) {
         out.text += att.getDataAsString();
       }
